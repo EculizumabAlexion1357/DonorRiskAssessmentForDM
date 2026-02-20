@@ -1,21 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
   <url>
-    <loc>https://YOUR-DOMAIN-OR-GITHUB-PAGES-URL/index.html</loc>
+    <loc>https://donorprediabetesrisk.org/</loc>
   </url>
+
   <url>
-    <loc>https://YOUR-DOMAIN-OR-GITHUB-PAGES-URL/calculator.html</loc>
+    <loc>https://donorprediabetesrisk.org/calculator.html</loc>
   </url>
+
   <url>
-    <loc>https://YOUR-DOMAIN-OR-GITHUB-PAGES-URL/stepwise.html</loc>
+    <loc>https://donorprediabetesrisk.org/stepwise.html</loc>
   </url>
+
   <url>
-    <loc>https://YOUR-DOMAIN-OR-GITHUB-PAGES-URL/indices.html</loc>
+    <loc>https://donorprediabetesrisk.org/indices.html</loc>
   </url>
+
   <url>
-    <loc>https://YOUR-DOMAIN-OR-GITHUB-PAGES-URL/considerations.html</loc>
+    <loc>https://donorprediabetesrisk.org/considerations.html</loc>
   </url>
+
   <url>
-    <loc>https://YOUR-DOMAIN-OR-GITHUB-PAGES-URL/references.html</loc>
+    <loc>https://donorprediabetesrisk.org/references.html</loc>
   </url>
+
 </urlset>
