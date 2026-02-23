@@ -914,7 +914,19 @@ function wire(){
     const TG_RAW     = $('tg') ? String($('tg').value || '').trim() : '';
     const HDL_RAW    = $('hdl') ? String($('hdl').value || '').trim() : '';
     const A1C_RAW    = $('a1c') ? String($('a1c').value || '').trim() : '';
+    
+    // raw typed OGTT values (exactly as entered)
+    const G0_RAW   = $('g0')   ? String($('g0').value   || '').trim() : '';
+    const G30_RAW  = $('g30')  ? String($('g30').value  || '').trim() : '';
+    const G60_RAW  = $('g60')  ? String($('g60').value  || '').trim() : '';
+    const G90_RAW  = $('g90')  ? String($('g90').value  || '').trim() : '';
+    const G120_RAW = $('g120') ? String($('g120').value || '').trim() : '';
 
+    const I0_RAW   = $('i0')   ? String($('i0').value   || '').trim() : '';
+    const I30_RAW  = $('i30')  ? String($('i30').value  || '').trim() : '';
+    const I60_RAW  = $('i60')  ? String($('i60').value  || '').trim() : '';
+    const I90_RAW  = $('i90')  ? String($('i90').value  || '').trim() : '';
+    const I120_RAW = $('i120') ? String($('i120').value || '').trim() : '';
     const SUMMARY = normalizeForCsv($('summary') ? $('summary').textContent.trim() : '');
     const RECOMMENDATION = normalizeForCsv(step4 ? step4.text : '');
     const HIGH_RISK_TRIGGERS = normalizeForCsv(step3 && step3.triggers ? step3.triggers.join(' | ') : '');
@@ -952,9 +964,15 @@ function wire(){
       HDL: x.hdl,
       A1C: x.a1c,
 
-      // OGTT glucose (mg/dL canonical) and insulin (pmol/L canonical)
-      G0: x.g0, G30: x.g30, G60: x.g60, G90: x.g90, G120: x.g120,
-      I0: x.i0, I30: x.i30, I60: x.i60, I90: x.i90, I120: x.i120,
+      // OGTT values – raw as entered + canonical used for calculations
+      G0_RAW, G30_RAW, G60_RAW, G90_RAW, G120_RAW,
+      I0_RAW, I30_RAW, I60_RAW, I90_RAW, I120_RAW,
+
+      G0_CANON: x.g0, G30_CANON: x.g30, G60_CANON: x.g60, G90_CANON: x.g90, G120_CANON: x.g120,
+      I0_CANON: x.i0, I30_CANON: x.i30, I60_CANON: x.i60, I90_CANON: x.i90, I120_CANON: x.i120,
+
+      GLUCOSE_UNITS_ENTERED: (state.unitMode === 'SI') ? 'mmol/L' : 'mg/dL',
+      INSULIN_UNITS_ENTERED: (state.unitMode === 'SI') ? 'pmol/L' : 'µU/mL', // adjust if needed
 
       IGI,
       STUMVOLL_1ST_PHASE,
