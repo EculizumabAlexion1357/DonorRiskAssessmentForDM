@@ -881,8 +881,12 @@ function wire(){
     a.remove();
     setTimeout(()=> URL.revokeObjectURL(url), 1500);
   }
+    function glucoseForExport(mgdl){
+    if(mgdl == null) return null;
+    return (state.unitMode === 'SI') ? (mgdl / 18) : mgdl;
+  }
 
-  function buildCsvRow(){
+    function buildCsvRow(){
     const x = getInputsCanonical();
 
     const step1 = step1_ogttIndication(x);
@@ -968,12 +972,18 @@ function wire(){
       G0_RAW, G30_RAW, G60_RAW, G90_RAW, G120_RAW,
       I0_RAW, I30_RAW, I60_RAW, I90_RAW, I120_RAW,
 
-      G0_CANON: x.g0, G30_CANON: x.g30, G60_CANON: x.g60, G90_CANON: x.g90, G120_CANON: x.g120,
+
+    // Glucose exported in the currently selected unit mode
+      G0:   fmtNum(glucoseForExport(x.g0),   (state.unitMode === 'SI') ? 1 : 0),
+      G30:  fmtNum(glucoseForExport(x.g30),  (state.unitMode === 'SI') ? 1 : 0),
+      G60:  fmtNum(glucoseForExport(x.g60),  (state.unitMode === 'SI') ? 1 : 0),
+      G90:  fmtNum(glucoseForExport(x.g90),  (state.unitMode === 'SI') ? 1 : 0),
+      G120: fmtNum(glucoseForExport(x.g120), (state.unitMode === 'SI') ? 1 : 0),
+      GLUCOSE_UNITS: (state.unitMode === 'SI') ? 'mmol/L' : 'mg/dL',
+
+    // Insulin canonical (keep as-is for now)
       I0_CANON: x.i0, I30_CANON: x.i30, I60_CANON: x.i60, I90_CANON: x.i90, I120_CANON: x.i120,
-
-      GLUCOSE_UNITS_ENTERED: (state.unitMode === 'SI') ? 'mmol/L' : 'mg/dL',
-      INSULIN_UNITS_ENTERED: (state.unitMode === 'SI') ? 'pmol/L' : 'µU/mL', // adjust if needed
-
+      INSULIN_UNITS_ENTERED: (state.unitMode === 'SI') ? 'pmol/L' : 'µU/mL',
       IGI,
       STUMVOLL_1ST_PHASE,
       PG_AUC_WEIGHTED,
