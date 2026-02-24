@@ -888,7 +888,9 @@ function wire(){
 
     function buildCsvRow(){
     const x = getInputsCanonical();
-
+  
+    const MODE = String(state.unitMode || '').trim().toUpperCase();
+    const A1C_UNIT_SEL = String(sel('a1cUnit') || 'percent').trim().toLowerCase();
     const step1 = step1_ogttIndication(x);
     const bmi = step1 ? step1.bmi : null;
     const step2 = step2_metabolicSyndrome(x);
@@ -968,14 +970,14 @@ function wire(){
 
      // Export A1c exactly as entered + unit label
       A1C: A1C_RAW,
-      A1C_UNITS: (sel('a1cUnit') === 'ifcc') ? 'mmol/mol' : '%',
+      A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
 
       // Export OGTT exactly as entered (prevents unit flipping)
       G0: G0_RAW, G30: G30_RAW, G60: G60_RAW, G90: G90_RAW, G120: G120_RAW,
       I0: I0_RAW, I30: I30_RAW, I60: I60_RAW, I90: I90_RAW, I120: I120_RAW,
 
-      GLUCOSE_UNITS: (String(state.unitMode||'').toUpperCase() === 'SI') ? 'mmol/L' : 'mg/dL',
-      INSULIN_UNITS: (String(state.unitMode||'').toUpperCase() === 'SI') ? 'pmol/L' : 'µU/mL',
+      GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
+      INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
       IGI,
       STUMVOLL_1ST_PHASE,
       PG_AUC_WEIGHTED,
