@@ -1318,9 +1318,6 @@ return;;
     };
 
     // Also wire in case onclick is stripped
-    document.addEventListener('DOMContentLoaded', ()=>{
-      const b = document.getElementById('downloadCsv');
-      if(b) b.addEventListener('click', ()=> window.downloadCsvSafe && window.downloadCsvSafe());
-    });
+   
   })();
 
