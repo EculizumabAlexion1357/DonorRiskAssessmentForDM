@@ -962,28 +962,20 @@ function wire(){
 
       TG_RAW,
       HDL_RAW,
-      A1C_RAW,
 
       TG: x.tg,
       HDL: x.hdl,
-      A1C: x.a1c,
 
-      // OGTT values – raw as entered + canonical used for calculations
-      G0_RAW, G30_RAW, G60_RAW, G90_RAW, G120_RAW,
-      I0_RAW, I30_RAW, I60_RAW, I90_RAW, I120_RAW,
+     // Export A1c exactly as entered + unit label
+      A1C: A1C_RAW,
+      A1C_UNITS: (sel('a1cUnit') === 'ifcc') ? 'mmol/mol' : '%',
 
+      // Export OGTT exactly as entered (prevents unit flipping)
+      G0: G0_RAW, G30: G30_RAW, G60: G60_RAW, G90: G90_RAW, G120: G120_RAW,
+      I0: I0_RAW, I30: I30_RAW, I60: I60_RAW, I90: I90_RAW, I120: I120_RAW,
 
-    // Glucose exported in the currently selected unit mode
-      G0:   fmtNum(glucoseForExport(x.g0),   (state.unitMode === 'SI') ? 1 : 0),
-      G30:  fmtNum(glucoseForExport(x.g30),  (state.unitMode === 'SI') ? 1 : 0),
-      G60:  fmtNum(glucoseForExport(x.g60),  (state.unitMode === 'SI') ? 1 : 0),
-      G90:  fmtNum(glucoseForExport(x.g90),  (state.unitMode === 'SI') ? 1 : 0),
-      G120: fmtNum(glucoseForExport(x.g120), (state.unitMode === 'SI') ? 1 : 0),
-      GLUCOSE_UNITS: (state.unitMode === 'SI') ? 'mmol/L' : 'mg/dL',
-
-    // Insulin canonical (keep as-is for now)
-      I0_CANON: x.i0, I30_CANON: x.i30, I60_CANON: x.i60, I90_CANON: x.i90, I120_CANON: x.i120,
-      INSULIN_UNITS_ENTERED: (state.unitMode === 'SI') ? 'pmol/L' : 'µU/mL',
+      GLUCOSE_UNITS: (String(state.unitMode||'').toUpperCase() === 'SI') ? 'mmol/L' : 'mg/dL',
+      INSULIN_UNITS: (String(state.unitMode||'').toUpperCase() === 'SI') ? 'pmol/L' : 'µU/mL',
       IGI,
       STUMVOLL_1ST_PHASE,
       PG_AUC_WEIGHTED,
@@ -1019,7 +1011,7 @@ function wire(){
     const {headers, values} = buildCsvRow();
     const csv = headers.map(csvEscape).join(',') + '\n' + values.map(csvEscape).join(',') + '\n';
     const stamp = (new Date().toISOString().slice(0,10));
-    toast('unitMode=' + state.unitMode);
+  
     downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
     toast('CSV downloaded');
     }catch(e){ console.error(e); toast('CSV export error - see Console'); }
