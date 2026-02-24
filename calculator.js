@@ -1139,185 +1139,170 @@ function toggleAllAccordions(open){
       return s;
     }
     function downloadTextFile(filename, mime, content){
-      const BOM = '\ufeff'; // for Excel
-      const payload = (mime && mime.indexOf('text/csv') === 0) ? (BOM + content) : content;
-      const blob = new Blob([payload], {type:mime});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=> URL.revokeObjectURL(url), 1500);
-    }
+  const BOM = '\ufeff'; // for Excel
+  const payload = (mime && mime.indexOf('text/csv') === 0) ? (BOM + content) : content;
+  const blob = new Blob([payload], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1500);
+}
 
-    function normalizeForCsv(s){
-      if(s===null || s===undefined) return '';
-      return String(s)
-        .replace(/\u2265/g, '>=')
-        .replace(/[\u2013\u2014]/g, '-')
-        .replace(/\u00a0/g, ' ');
-    }
+function normalizeForCsv(s){
+  if(s===null || s===undefined) return '';
+  return String(s)
+    .replace(/\u2265/g, '>=')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u00a0/g, ' ');
+}
 
-    function getVal(id){
-      const el = document.getElementById(id);
-      return el ? String(el.value || '').trim() : '';
-    }
-
-    function requireIds(){
-      // Your current UI uses ptName/ptMRN/ptDOB/testDate
-      const name = getVal('ptName');
-      const mrn  = getVal('ptMRN');
-      const dob  = getVal('ptDOB');
-      const tdt  = getVal('testDate');
-      if(!name || !mrn || !dob || !tdt){
-        safeToast('Enter Name, MRN, DOB, and OGTT test date to download CSV.');
-        return false;
-      }
-      return true;
-    }
-
-    // Collect ALL input fields present on the page (keeps future-proof)
-    function collectAllInputs(){
-      const inputs = Array.from(document.querySelectorAll('input, select, textarea'));
-      const pairs = [];
-      for(const el of inputs){
-        if(!el.id) continue;
-        // skip identifiers already exported at front + includePt toggle
-        const skipIds = new Set(['ptName','ptMRN','ptDOB','testDate','includePt','downloadCsv','csvStatus']);
-        if(skipIds.has(el.id)) continue;
-        // skip buttons and hidden
-        if(el.type === 'button' || el.type === 'submit' || el.type === 'hidden') continue;
-        let key = el.id.toUpperCase();
-        if(el.id === 'eth') key = 'ETHNICITY';
-        let val = '';
-        if(el.tagName.toLowerCase() === 'select') val = el.value;
-        else if(el.type === 'checkbox') val = el.checked ? 'TRUE' : 'FALSE';
-        else val = el.value;
-        pairs.push([key, val]);
-      }
-      return pairs;
-    }
-
-    // Pull key computed values if the functions exist, without breaking anything
-    function collectComputed(){
-      const out = [];
-      try{
-        if(typeof getInputsCanonical === 'function'){
-          const x = getInputsCanonical();
-          if(x){
-            // canonical values
-            if(x.weight!=null) out.push(['WEIGHT_KG', x.weight]);
-            if(x.height!=null) out.push(['HEIGHT_CM', x.height]);
-            if(x.waist!=null) out.push(['WAIST_CM', x.waist]);
-            if(x.tg!=null) out.push(['TG', x.tg]);
-            if(x.hdl!=null) out.push(['HDL', x.hdl]);
-            if(x.a1c!=null) out.push(['A1C', x.a1c]);
-            // glucose/insulin
-            ['g0','g30','g60','g90','g120','i0','i30','i60','i90','i120'].forEach(k=>{
-              if(x[k]!=null) out.push([k.toUpperCase(), x[k]]);
-            });
-            // indices
-            if(typeof calc_homa_ir === 'function') out.push(['HOMA_IR', fmtNum(calc_homa_ir(x), 4)]);
-            if(typeof calc_matsuda === 'function') out.push(['MATSUDA', fmtNum(calc_matsuda(x), 4)]);
-            if(typeof calc_igi === 'function') out.push(['IGI', fmtNum(calc_igi(x), 4)]);
-            if(typeof calc_di === 'function') out.push(['DI', fmtNum(calc_di(x), 4)]);
-            if(typeof calc_pg_auc_weighted === 'function') out.push(['PG_AUC_WEIGHTED','PG_AUC', fmtNum(calc_pg_auc_weighted(x), 4)]);
-            if(typeof calc_stumvoll1 === 'function') out.push(['STUMVOLL_1ST_PHASE', fmtNum(calc_stumvoll1(x), 4)]);
-          }
-        }
-      }catch(e){
-        console.error('compute export error', e);
-      }
-      // summary/recommendation if present
-      try{
-        const recEl = document.getElementById('recommendation');
-        if(recEl) out.push(['RECOMMENDATION', normalizeForCsv(recEl.textContent.trim())]);
-      }catch(e){}
-      // High-risk combination (concise)
-      try{
-        if(typeof getInputsCanonical === 'function' && typeof step2_metabolicSyndrome === 'function' && typeof step3_highRisk === 'function'){
-          const x = getInputsCanonical();
-          const ms = step2_metabolicSyndrome(x);
-          const hr = step3_highRisk(x, ms);
-          if(hr){
-            const parts = [];
-            if(hr.ifg) parts.push('IFG');
-            if(hr.igt) parts.push('IGT');
-            if(hr.oneHr) parts.push('1H_PG>155');
-            if(hr.a1c6064) parts.push('A1C_6.0-6.4');
-            if(hr.igiLow) parts.push('IGI_LOW');
-            if(hr.stumLow) parts.push('STUMVOLL_LOW');
-            // If none, keep blank
-            out.push(['HIGH_RISK_COMBINATION', parts.join('+')]);
-          }
-        }
-      }catch(e){ console.error('risk combo export error', e); }
-      return out;
-    }
-
-    window.downloadCsvSafe = function(){
-      try{
-        setCsvStatus('Preparing...');
-        setCsvStatus('Preparing...');
-
-const getVal = (id) => {
+function getVal(id){
   const el = document.getElementById(id);
   return el ? String(el.value || '').trim() : '';
-};
+}
 
-const MODE = String((window.state && state.unitMode) || getVal('unitMode') || '').trim().toUpperCase();
-const A1C_UNIT_SEL = String(getVal('a1cUnit') || 'percent').trim().toLowerCase();
+function requireIds(){
+  // Your current UI uses ptName/ptMRN/ptDOB/testDate
+  const name = getVal('ptName');
+  const mrn  = getVal('ptMRN');
+  const dob  = getVal('ptDOB');
+  const tdt  = getVal('testDate');
+  if(!name || !mrn || !dob || !tdt){
+    safeToast('Enter Name, MRN, DOB, and OGTT test date to download CSV.');
+    return false;
+  }
+  return true;
+}
 
-const rowObj = {
-  UNIT_MODE: MODE,
+// Collect ALL input fields present on the page (keeps future-proof)
+function collectAllInputs(){
+  const inputs = Array.from(document.querySelectorAll('input, select, textarea'));
+  const pairs = [];
+  for(const el of inputs){
+    if(!el.id) continue;
+    const skipIds = new Set(['ptName','ptMRN','ptDOB','testDate','includePt','downloadCsv','csvStatus']);
+    if(skipIds.has(el.id)) continue;
+    if(el.type === 'button' || el.type === 'submit' || el.type === 'hidden') continue;
 
-  A1C: getVal('a1c'),
-  A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
+    let key = el.id.toUpperCase();
+    if(el.id === 'eth') key = 'ETHNICITY';
 
-  G0: getVal('g0'), G30: getVal('g30'), G60: getVal('g60'), G90: getVal('g90'), G120: getVal('g120'),
-  GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
+    let val = '';
+    if(el.tagName.toLowerCase() === 'select') val = el.value;
+    else if(el.type === 'checkbox') val = el.checked ? 'TRUE' : 'FALSE';
+    else val = el.value;
 
-  I0: getVal('i0'), I30: getVal('i30'), I60: getVal('i60'), I90: getVal('i90'), I120: getVal('i120'),
-  INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
-};
+    pairs.push([key, val]);
+  }
+  return pairs;
+}
 
-const headers = Object.keys(rowObj);
+// Pull key computed values if the functions exist, without breaking anything
+function collectComputed(){
+  const out = [];
+  try{
+    if(typeof getInputsCanonical === 'function'){
+      const x = getInputsCanonical();
+      if(x){
+        if(x.weight!=null) out.push(['WEIGHT_KG', x.weight]);
+        if(x.height!=null) out.push(['HEIGHT_CM', x.height]);
+        if(x.waist!=null) out.push(['WAIST_CM', x.waist]);
+        if(x.tg!=null) out.push(['TG', x.tg]);
+        if(x.hdl!=null) out.push(['HDL', x.hdl]);
+        if(x.a1c!=null) out.push(['A1C_CANON', x.a1c]);
 
-const csvEscape2 = (v) => {
-  const s = (v === null || v === undefined) ? '' : String(v);
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-};
+        ['g0','g30','g60','g90','g120','i0','i30','i60','i90','i120'].forEach(k=>{
+          if(x[k]!=null) out.push([(`${k}_CANON`).toUpperCase(), x[k]]);
+        });
 
-const csv =
-  headers.map(csvEscape2).join(',') + '\n' +
-  headers.map(h => csvEscape2(rowObj[h])).join(',') + '\n';
-
-// Download with BOM for Excel
-const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-const stamp = new Date().toISOString().slice(0, 10);
-a.href = url;
-a.download = `OGTT_Risk_${stamp}.csv`;
-document.body.appendChild(a);
-a.click();
-a.remove();
-setTimeout(() => URL.revokeObjectURL(url), 1500);
-
-setCsvStatus('CSV downloaded');
-return;;
-      }catch(e){
-        console.error('CSV download failed', e);
-        setCsvStatus('Failed.');
-        safeToast('CSV download failed. See Console for details.');
-      }finally{
-        setTimeout(()=> setCsvStatus(''), 2500);
+        if(typeof calc_homa_ir === 'function') out.push(['HOMA_IR', fmtNum(calc_homa_ir(x), 4)]);
+        if(typeof calc_matsuda === 'function') out.push(['MATSUDA', fmtNum(calc_matsuda(x), 4)]);
+        if(typeof calc_igi === 'function') out.push(['IGI', fmtNum(calc_igi(x), 4)]);
+        if(typeof calc_di === 'function') out.push(['DI', fmtNum(calc_di(x), 4)]);
+        if(typeof calc_pg_auc_weighted === 'function') out.push(['PG_AUC_WEIGHTED', fmtNum(calc_pg_auc_weighted(x), 4)]);
+        if(typeof calc_stumvoll1 === 'function') out.push(['STUMVOLL_1ST_PHASE', fmtNum(calc_stumvoll1(x), 4)]);
       }
+    }
+  }catch(e){
+    console.error('compute export error', e);
+  }
+
+  try{
+    const recEl = document.getElementById('recommendation');
+    if(recEl) out.push(['RECOMMENDATION', normalizeForCsv(recEl.textContent.trim())]);
+  }catch(e){}
+
+  try{
+    if(typeof getInputsCanonical === 'function' && typeof step2_metabolicSyndrome === 'function' && typeof step3_highRisk === 'function'){
+      const x = getInputsCanonical();
+      const ms = step2_metabolicSyndrome(x);
+      const hr = step3_highRisk(x, ms);
+      if(hr){
+        const parts = [];
+        if(hr.ifg) parts.push('IFG');
+        if(hr.igt) parts.push('IGT');
+        if(hr.oneHr) parts.push('1H_PG>155');
+        if(hr.a1c6064) parts.push('A1C_6.0-6.4');
+        if(hr.igiLow) parts.push('IGI_LOW');
+        if(hr.stumLow) parts.push('STUMVOLL_LOW');
+        out.push(['HIGH_RISK_COMBINATION', parts.join('+')]);
+      }
+    }
+  }catch(e){ console.error('risk combo export error', e); }
+
+  return out;
+}
+
+// SIMPLE CSV EXPORT: exports exactly what is in the input boxes (no unit flipping)
+window.downloadCsvSafe = function(){
+  try{
+    setCsvStatus('Preparing...');
+
+    // If you want to REQUIRE identifiers, keep this line.
+//  if(!requireIds()) { setCsvStatus(''); return; }
+
+    const MODE = String((window.state && state.unitMode) || getVal('unitMode') || '').trim().toUpperCase();
+    const A1C_UNIT_SEL = String(getVal('a1cUnit') || 'percent').trim().toLowerCase();
+
+    const rowObj = {
+      UNIT_MODE: MODE,
+
+      // As-entered / on-screen values
+      A1C: getVal('a1c'),
+      A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
+
+      G0: getVal('g0'),   G30: getVal('g30'), G60: getVal('g60'), G90: getVal('g90'), G120: getVal('g120'),
+      GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
+
+      I0: getVal('i0'),   I30: getVal('i30'), I60: getVal('i60'), I90: getVal('i90'), I120: getVal('i120'),
+      INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
     };
 
-    // Also wire in case onclick is stripped
-   
-  })();
+    const headers = Object.keys(rowObj);
 
+    const csvEscape = (v) => {
+      const s = (v === null || v === undefined) ? '' : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    };
+
+    const csv =
+      headers.map(csvEscape).join(',') + '\n' +
+      headers.map(h => csvEscape(rowObj[h])).join(',') + '\n';
+
+    const stamp = (new Date().toISOString().slice(0,10));
+    downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
+
+    setCsvStatus('CSV downloaded');
+    return;
+  }catch(e){
+    console.error('CSV download failed', e);
+    setCsvStatus('Failed.');
+    safeToast('CSV download failed. See Console for details.');
+  }finally{
+    setTimeout(()=> setCsvStatus(''), 2500);
+  }
+};
