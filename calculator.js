@@ -1260,90 +1260,54 @@ function toggleAllAccordions(open){
     window.downloadCsvSafe = function(){
       try{
         setCsvStatus('Preparing...');
-        if(!requireIds()){ setCsvStatus(''); return; }
+        setCsvStatus('Preparing...');
 
-        const pairs = collectAllInputs();
-        const computed = collectComputed();
+const getVal = (id) => {
+  const el = document.getElementById(id);
+  return el ? String(el.value || '').trim() : '';
+};
 
-        // Build a single-row CSV with stable headers: INPUT_* + COMPUTED_*
-        const row = {};
-        // key identifiers first
-        row['OGTT_TEST_DATE'] = getVal('testDate');
-        row['NAME'] = getVal('ptName');
-        row['MRN'] = getVal('ptMRN');
-        row['DOB'] = getVal('ptDOB');
+const MODE = String((window.state && state.unitMode) || getVal('unitMode') || '').trim().toUpperCase();
+const A1C_UNIT_SEL = String(getVal('a1cUnit') || 'percent').trim().toLowerCase();
 
-        // include unit mode if exists
-        try{ if(window.state && state.unitMode) row['UNIT_MODE'] = state.unitMode; }catch(e){}
+const rowObj = {
+  UNIT_MODE: MODE,
 
+  A1C: getVal('a1c'),
+  A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
 
-        // ---- Indices from on-screen results (preferred: exactly as displayed) ----
-        // Ensure columns exist
-        row['HOMA_IR'] = row['HOMA_IR'] || '';
-        row['MATSUDA'] = row['MATSUDA'] || '';
-        row['IGI'] = row['IGI'] || '';
-        row['DI'] = row['DI'] || '';
-        row['PG_AUC'] = row['PG_AUC'] || '';
-        row['STUMVOLL_1ST_PHASE'] = row['STUMVOLL_1ST_PHASE'] || '';
+  G0: getVal('g0'), G30: getVal('g30'), G60: getVal('g60'), G90: getVal('g90'), G120: getVal('g120'),
+  GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
 
-        function getText(id){
-          const el = document.getElementById(id);
-          if(!el) return '';
-          const t = String(el.textContent || '').trim();
-          if(!t || t === '—' || t === '-') return '';
-          return t;
-        }
-        // These IDs exist in calculator.html
-        const IGI_TX = getText('igi');
-        const MATSUDA_TX = getText('matsuda');
-        const HOMA_TX = getText('homa');
-        const DI_TX = getText('di');
-        const PGAUC_TX = getText('pgauc');
-        const STUM1_TX = getText('stum1');
+  I0: getVal('i0'), I30: getVal('i30'), I60: getVal('i60'), I90: getVal('i90'), I120: getVal('i120'),
+  INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
+};
 
-        if(IGI_TX) row['IGI'] = IGI_TX;
-        if(MATSUDA_TX) row['MATSUDA'] = MATSUDA_TX;
-        if(HOMA_TX) row['HOMA_IR'] = HOMA_TX;
-        if(DI_TX) row['DI'] = DI_TX;
-        if(PGAUC_TX) row['PG_AUC'] = PGAUC_TX;
-        if(STUM1_TX) row['STUMVOLL_1ST_PHASE'] = STUM1_TX;
+const headers = Object.keys(rowObj);
 
+const csvEscape2 = (v) => {
+  const s = (v === null || v === undefined) ? '' : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
 
-        // add all input ids
-        for(const [k,v] of pairs){
-          if(!(k in row)) row[k] = v;
-        }
-        // add computed (may overwrite duplicates with canonical)
-        for(const [k,v] of computed){
-          row[k] = (v===null || v===undefined) ? '' : v;
-        }
+const csv =
+  headers.map(csvEscape2).join(',') + '\n' +
+  headers.map(h => csvEscape2(rowObj[h])).join(',') + '\n';
 
-        // Column order: identifiers -> demographics -> anthropometrics -> OGTT glucose/insulin -> indices -> risk -> recommendation
-        const preferred = [
-          'OGTT_TEST_DATE','NAME','MRN','DOB','UNIT_MODE',
-          'ETHNICITY','AGE','AGE_YEARS','SEX',
-          'WEIGHT','HEIGHT','WAIST','WEIGHT_RAW','HEIGHT_RAW','WAIST_RAW','WEIGHT_KG','HEIGHT_CM','WAIST_CM','BMI',
-          'SBP','DBP','TG','HDL','A1C','TG_RAW','HDL_RAW',
-          'G0','G30','G60','G90','G120','I0','I30','I60','I90','I120',
-          'HOMA_IR','MATSUDA','IGI','DI','PG_AUC_WEIGHTED','PG_AUC','STUMVOLL_1ST_PHASE',
-          'IFG','IGT','ONE_HR_PG_GT_155','A1C_6_0_TO_6_4','IGI_LOW','STUMVOLL1_LOW','HIGH_RISK_STATUS','HIGH_RISK','HIGH_RISK_TRIGGERS','HIGH_RISK_COMBINATION',
-          'RECOMMENDATION'
-        ];
+// Download with BOM for Excel
+const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+const stamp = new Date().toISOString().slice(0, 10);
+a.href = url;
+a.download = `OGTT_Risk_${stamp}.csv`;
+document.body.appendChild(a);
+a.click();
+a.remove();
+setTimeout(() => URL.revokeObjectURL(url), 1500);
 
-        const keys = Object.keys(row);
-        const headers = [];
-        // add preferred first if present
-        for(const k of preferred){ if(keys.includes(k) && !headers.includes(k)) headers.push(k); }
-        // then everything else (stable alphabetical) excluding the above
-        const rest = keys.filter(k => !headers.includes(k)).sort();
-        headers.push(...rest);
-
-        const values = headers.map(h => csvEscape(row[h]));
-        const csv = headers.map(csvEscape).join(',') + '\n' + values.join(',') + '\n';
-
-        const stamp = (new Date().toISOString().slice(0,10));
-        downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
-        setCsvStatus('Downloaded.');
+setCsvStatus('CSV downloaded');
+return;;
       }catch(e){
         console.error('CSV download failed', e);
         setCsvStatus('Failed.');
