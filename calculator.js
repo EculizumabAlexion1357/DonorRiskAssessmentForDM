@@ -1,12 +1,6 @@
 /*
   OGTT–DM Risk Stratifier (Fresh)
-  Implements the stepwise logic from the user's Figure 1 flowchart:
-  - Step 1: OGTT indication triggers
-  - Step 2: ATP III metabolic syndrome (≥3/5)
-  - Step 3: High-risk prognostic marker combinations
-  - Step 4: Age-based recommendation for high-risk group
-
-  NOTE: This is clinician-facing/educational decision support only.
+  NOTE: clinician-facing/educational decision support only.
 */
 
 const $ = (id) => document.getElementById(id);
@@ -21,19 +15,23 @@ const conv = {
   // glucose
   mgdl_to_mmol: (mgdl) => mgdl / 18.0,
   mmol_to_mgdl: (mmol) => mmol * 18.0,
-  // insulin
-  mU_to_pmol: (mu) => mu * 6.0,   // as used in the original app
+
+  // insulin (µU/mL == mU/L)
+  mU_to_pmol: (mu) => mu * 6.0,
   pmol_to_mU: (pmol) => pmol / 6.0,
+
   // weight/height
   lb_to_kg: (lb) => lb * 0.45359237,
   kg_to_lb: (kg) => kg / 0.45359237,
   in_to_cm: (inch) => inch * 2.54,
   cm_to_in: (cm) => cm / 2.54,
+
   // lipids
   tg_mgdl_to_mmol: (mgdl) => mgdl * 0.01129,
   tg_mmol_to_mgdl: (mmol) => mmol / 0.01129,
   hdl_mgdl_to_mmol: (mgdl) => mgdl * 0.02586,
   hdl_mmol_to_mgdl: (mmol) => mmol / 0.02586,
+
   // HbA1c
   a1c_ifcc_to_percent: (mmolMol) => (0.09148 * mmolMol) + 2.152,
   a1c_percent_to_ifcc: (pct) => (pct - 2.152) / 0.09148,
@@ -45,11 +43,7 @@ function num(id){
 
   let v = el.value;
   if(v === '' || v === null || v === undefined) return null;
-
-  // Allow text inputs; strip commas/spaces
   v = String(v).trim().replace(/,/g, '');
-
-  // Allow only digits and a single decimal point
   if(!/^\d*\.?\d*$/.test(v)) return null;
 
   const n = Number(v);
@@ -57,11 +51,14 @@ function num(id){
 }
 
 function bool(id){
-  return $(id).checked === true;
+  const el = $(id);
+  return el ? el.checked === true : false;
 }
 
 function sel(id){
-  const v = $(id).value;
+  const el = $(id);
+  if(!el) return null;
+  const v = el.value;
   return v === '' ? null : v;
 }
 
@@ -71,7 +68,33 @@ function round(n, d=2){
   return Math.round(n*p)/p;
 }
 
+function normalizeForCsv(s){
+  if(s===null || s===undefined) return '';
+  return String(s)
+    .replace(/\u2265/g, '>=')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u00a0/g, ' ');
+}
 
+function csvEscape(v){
+  const s = (v===null || v===undefined) ? '' : String(v);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+function downloadTextFile(filename, mime, content){
+  const BOM = '\ufeff';
+  const payload = (mime && mime.indexOf('text/csv') === 0) ? (BOM + content) : content;
+  const blob = new Blob([payload], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1500);
+}
 
 // ---------- OGTT field unit flip (convert displayed values when switching modes) ----------
 function convertOgttFields(oldMode, newMode){
@@ -83,17 +106,16 @@ function convertOgttFields(oldMode, newMode){
     const v = num(id);
     if(v===null) return;
     const out = fn(v);
-    // keep reasonable precision for clinical entry fields
     const r = round(out, decimals);
     $(id).value = (r===null ? '' : String(r));
   };
 
   if(oldMode==='US' && newMode==='SI'){
     gIds.forEach(id => convertOne(id, conv.mgdl_to_mmol, 1));
-    iIds.forEach(id => convertOne(id, conv.mU_to_pmol, 1));
+    iIds.forEach(id => convertOne(id, conv.mU_to_pmol, 1));  // µU/mL -> pmol/L
   } else if(oldMode==='SI' && newMode==='US'){
     gIds.forEach(id => convertOne(id, conv.mmol_to_mgdl, 1));
-    iIds.forEach(id => convertOne(id, conv.pmol_to_mU, 1));
+    iIds.forEach(id => convertOne(id, conv.pmol_to_mU, 1));  // pmol/L -> µU/mL
   }
 }
 
@@ -135,8 +157,8 @@ function convertBaselineFields(oldMode, newMode){
   if(a1cEl && a1cUnitEl){
     const a1cVal = num('a1c');
     const curUnit = a1cUnitEl.value || 'percent';
+
     if(newMode === 'SI'){
-      // prefer IFCC
       if(curUnit === 'percent'){
         if(a1cVal !== null){
           const ifcc = conv.a1c_percent_to_ifcc(a1cVal);
@@ -146,7 +168,6 @@ function convertBaselineFields(oldMode, newMode){
         a1cUnitEl.value = 'ifcc';
       }
     } else if(newMode === 'US'){
-      // prefer percent
       if(curUnit === 'ifcc'){
         if(a1cVal !== null){
           const pct = conv.a1c_ifcc_to_percent(a1cVal);
@@ -158,11 +179,12 @@ function convertBaselineFields(oldMode, newMode){
     }
   }
 }
+
 function setBadge(el, kind, text){
+  if(!el) return;
   el.classList.remove('good','warn','bad');
   if(kind) el.classList.add(kind);
 
-  // Allow safe HTML for specific badges (e.g., BMI), while keeping default text behavior.
   if(text && typeof text === 'object' && typeof text.html === 'string'){
     el.innerHTML = text.html;
   } else {
@@ -171,14 +193,13 @@ function setBadge(el, kind, text){
 }
 
 // ---------- calculations ----------
-
 function getInputsCanonical(){
-  // Canonical internal units:
-  // - glucose: mg/dL
-  // - insulin: pmol/L
-  // - TG/HDL: mg/dL
-  // - weight: kg
-  // - height/waist: cm
+  // Canonical internal units used for calculations:
+  // glucose: mg/dL
+  // insulin: pmol/L
+  // TG/HDL: mg/dL
+  // weight: kg
+  // height/waist: cm
   const mode = state.unitMode;
 
   // demographic
@@ -205,7 +226,7 @@ function getInputsCanonical(){
   const sbp = num('sbp');
   const dbp = num('dbp');
   const a1cRaw = num('a1c');
-  const a1cUnit = (typeof sel === 'function') ? (sel('a1cUnit') || 'percent') : 'percent';
+  const a1cUnit = (sel('a1cUnit') || 'percent');
   const a1c = (a1cRaw == null) ? null : (a1cUnit === 'ifcc' ? conv.a1c_ifcc_to_percent(a1cRaw) : a1cRaw);
   const bpMeds = sel('bpMeds');
 
@@ -230,27 +251,38 @@ function getInputsCanonical(){
   const g120 = (g120raw==null)?null:(mode==='US'?g120raw:conv.mmol_to_mgdl(g120raw));
 
   // OGTT insulin
+  // FIXED: if US, user enters µU/mL -> convert to pmol/L; if SI, keep pmol/L
   const i0raw = num('i0');
   const i30raw = num('i30');
   const i60raw = num('i60');
   const i90raw = num('i90');
   const i120raw = num('i120');
 
-  const i0 = (i0raw==null)?null:(mode==='US'?i0raw:conv.pmol_to_mU(i0raw));
-  const i30 = (i30raw==null)?null:(mode==='US'?i30raw:conv.pmol_to_mU(i30raw));
-  const i60 = (i60raw==null)?null:(mode==='US'?i60raw:conv.pmol_to_mU(i60raw));
-  const i90 = (i90raw==null)?null:(mode==='US'?i90raw:conv.pmol_to_mU(i90raw));
-  const i120 = (i120raw==null)?null:(mode==='US'?i120raw:conv.pmol_to_mU(i120raw));
+  const i0 = (i0raw==null)?null:(mode==='US'?conv.mU_to_pmol(i0raw):i0raw);
+  const i30 = (i30raw==null)?null:(mode==='US'?conv.mU_to_pmol(i30raw):i30raw);
+  const i60 = (i60raw==null)?null:(mode==='US'?conv.mU_to_pmol(i60raw):i60raw);
+  const i90 = (i90raw==null)?null:(mode==='US'?conv.mU_to_pmol(i90raw):i90raw);
+  const i120 = (i120raw==null)?null:(mode==='US'?conv.mU_to_pmol(i120raw):i120raw);
 
   return {
     mode,
+
+    // canonical + convenience keys
     age, sex, eth,
     weightKg, heightCm, waistCm,
     tgMgdl, hdlMgdl,
     sbp, dbp, a1c, bpMeds,
     gdm, pancreatitis, masld, pcos, fdr,
+
     g0, g30, g60, g90, g120,
     i0, i30, i60, i90, i120,
+
+    // aliases used by your CSV + UI
+    weight: weightKg,
+    height: heightCm,
+    waist: waistCm,
+    tg: tgMgdl,
+    hdl: hdlMgdl,
   };
 }
 
@@ -265,20 +297,14 @@ function isHighRiskEthnicity(eth){
 }
 
 function step1_ogttIndication(x){
-  // From Figure 1 Step 1
   const reasons = [];
 
-  // FPG 100-125
   if(x.g0 != null && x.g0 >= 100 && x.g0 < 126) reasons.push('FPG 100–125 mg/dL');
-
-  // A1c 5.7–6.4
   if(x.a1c != null && x.a1c >= 5.7 && x.a1c <= 6.4) reasons.push('HbA1c 5.7–6.4%');
 
-  // GDM / pancreatitis
   if(x.gdm) reasons.push('History of gestational diabetes');
   if(x.pancreatitis) reasons.push('History of pancreatitis');
 
-  // BMI trigger + ≥1 additional risk factor
   const bmi = bmiFromKgCm(x.weightKg, x.heightCm);
   const bmiThresh = (x.eth === 'Asian American') ? 23 : 25;
 
@@ -294,10 +320,7 @@ function step1_ogttIndication(x){
     (x.tgMgdl != null && x.tgMgdl > 250)
   );
 
-  const hasOther = x.masld || x.pcos || x.fdr || isHighRiskEthnicity(x.eth);
-
   if(hasBmiTrigger && (x.masld || hasHTN || hasDyslipidemia || x.pcos || x.fdr || isHighRiskEthnicity(x.eth))) {
-    // Provide a specific, human-readable list (user request: list all reasons, not just a generic BMI trigger)
     const extras = [];
     if(x.masld) extras.push('MASLD');
     if(hasHTN) extras.push('Hypertension ≥130/80 mm Hg or on treatment');
@@ -309,25 +332,19 @@ function step1_ogttIndication(x){
     extras.forEach(e => reasons.push(e));
   }
 
-  const indicated = reasons.length > 0;
-
   return {
-    indicated,
+    indicated: reasons.length > 0,
     reasons,
     bmi,
     bmiThresh,
-    detail: { hasBmiTrigger, hasHTN, hasDyslipidemia, hasOther }
   };
 }
 
 function step2_metabolicSyndrome(x){
-  // ATP III criteria (≥3/5)
-  // Waist: >102 cm men, >88 cm women
   const met = [];
   const notMet = [];
   const unknown = [];
 
-  // waist
   if(x.sex == null || x.waistCm == null){
     unknown.push('Waist circumference');
   } else {
@@ -335,18 +352,15 @@ function step2_metabolicSyndrome(x){
     (ok ? met : notMet).push('Waist circumference');
   }
 
-  // TG
   if(x.tgMgdl == null) unknown.push('Triglycerides');
   else (x.tgMgdl >= 150 ? met : notMet).push('Triglycerides');
 
-  // HDL
   if(x.sex == null || x.hdlMgdl == null) unknown.push('HDL');
   else {
     const ok = (x.sex === 'M' ? x.hdlMgdl < 40 : x.hdlMgdl < 50);
     (ok ? met : notMet).push('HDL');
   }
 
-  // BP
   const onTx = x.bpMeds === 'yes';
   if(onTx){
     met.push('Blood pressure');
@@ -357,75 +371,63 @@ function step2_metabolicSyndrome(x){
     (ok ? met : notMet).push('Blood pressure');
   }
 
-  // FPG
   if(x.g0 == null) unknown.push('Fasting glucose');
   else (x.g0 >= 100 ? met : notMet).push('Fasting glucose');
 
   const count = met.length;
   const complete = (unknown.length === 0);
   const present = (count >= 3) && complete;
-  const maybePresent = (count >= 3) && !complete;
 
-  return {
-    count, present, maybePresent, complete,
-    met, notMet, unknown
-  };
+  return { count, present, complete, met, notMet, unknown };
+}
+
+// ---- indices (compute in US conventional where required) ----
+function insulin_mU(pmol){
+  return (pmol==null)?null:conv.pmol_to_mU(pmol);
 }
 
 function calc_igi(x){
   // IGI = (I30 - I0) / (G30 - G0)
-  // IMPORTANT: This ratio is unit-sensitive.
-  // We ALWAYS compute IGI in *US conventional units*:
-  //   - Insulin in mU/L (µU/mL)
-  //   - Glucose in mg/dL
-  // Our internal canonical representation is:
-  //   - Glucose in mg/dL
-  //   - Insulin in pmol/L
-  // Therefore we convert insulin pmol/L -> mU/L by dividing by 6 before computing IGI.
-  // (This matches the user requirement: if SI is entered, it must be converted and IGI still computed in US units.)
-  if(x.i0 == null || x.i30 == null || x.g0 == null || x.g30 == null) return null;  const dI = x.i30 - x.i0;
+  // glucose mg/dL; insulin must be mU/L
+  if(x.i0 == null || x.i30 == null || x.g0 == null || x.g30 == null) return null;
+  const i0 = insulin_mU(x.i0);
+  const i30 = insulin_mU(x.i30);
+  const dI = i30 - i0;
   const dG = x.g30 - x.g0;
   if(dG === 0) return null;
   return dI / dG;
 }
 
-
 function calc_pg_auc_weighted(x){
-  // Weighted PG AUC (mg·h/dL) per requested formula:
-  // (PG0 + 2×PG30 + 3×PG60 + 2×PG120) / 4
-  // Uses glucose in canonical mg/dL.
   if(x.g0 == null || x.g30 == null || x.g60 == null || x.g120 == null) return null;
   return (x.g0 + 2*x.g30 + 3*x.g60 + 2*x.g120) / 4;
 }
 
 function calc_matsuda(x){
-  // Matsuda index (ISI): 10,000 / sqrt( (G0 * I0) * (Gmean * Imean) )
-  // Glucose in mg/dL. Insulin in mU/L (µU/mL).
+  // 10,000 / sqrt( (G0*I0)*(Gmean*Imean) ) with insulin in mU/L
   const gVals = [x.g0, x.g30, x.g60, x.g90, x.g120].filter(v => v != null);
-  const iValsPmol = [x.i0, x.i30, x.i60, x.i90, x.i120].filter(v => v != null);
+  const iVals = [x.i0, x.i30, x.i60, x.i90, x.i120].filter(v => v != null).map(insulin_mU);
 
   if(x.g0 == null || x.i0 == null) return null;
-  if(gVals.length < 2 || iValsPmol.length < 2) return null;  const iVals = [x.i0, x.i30, x.i60, x.i90, x.i120].filter(v => v != null);
+  if(gVals.length < 2 || iVals.length < 2) return null;
 
   const gMean = gVals.reduce((a,b)=>a+b,0) / gVals.length;
   const iMean = iVals.reduce((a,b)=>a+b,0) / iVals.length;
 
-  const denom = Math.sqrt((x.g0 * x.i0) * (gMean * iMean));
+  const i0 = insulin_mU(x.i0);
+  const denom = Math.sqrt((x.g0 * i0) * (gMean * iMean));
   if(!Number.isFinite(denom) || denom <= 0) return null;
   return 10000 / denom;
 }
 
-
 function calc_homa_ir(x){
-  // HOMA-IR = (G0 [mg/dL] × I0 [mU/L, i.e., µU/mL]) / 405
-  // IMPORTANT: Always computed in US conventional units.
-  // In getInputsCanonical(), glucose is converted to mg/dL and insulin to mU/L when user selects SI.
+  // (G0 mg/dL * I0 mU/L) / 405
   if(x.g0 == null || x.i0 == null) return null;
-  return (x.g0 * x.i0) / 405.0;
+  const i0 = insulin_mU(x.i0);
+  return (x.g0 * i0) / 405.0;
 }
 
 function calc_di(x){
-  // Disposition Index (DI) = Matsuda index × IGI
   const m = calc_matsuda(x);
   const igi = calc_igi(x);
   if(m == null || igi == null) return null;
@@ -433,60 +435,32 @@ function calc_di(x){
 }
 
 function calc_stumvoll1(x){
-  // 1st-phase insulin secretion (Stumvoll)
-  // User-supplied equation:
-  //   1283 + (1.829 × I30) – (138.7 × G30) + (3.772 × I0)
-  // Units for this published coefficient set are:
-  //   - Insulin in pmol/L
-  //   - Glucose in mmol/L
-  // Our canonical representation uses glucose in mg/dL, so we convert G30 -> mmol/L by dividing by 18.
+  // 1283 + 1.829*I30(pmol/L) - 138.7*G30(mmol/L) + 3.772*I0(pmol/L)
   if(x.i0 == null || x.i30 == null || x.g30 == null) return null;
   const g30_mmol = x.g30 / 18;
-    const i30_pmol = conv.mU_to_pmol(x.i30);
-  const i0_pmol = conv.mU_to_pmol(x.i0);
-  return 1283 + (1.829 * i30_pmol) - (138.7 * g30_mmol) + (3.772 * i0_pmol);
+  return 1283 + (1.829 * x.i30) - (138.7 * g30_mmol) + (3.772 * x.i0);
 }
 
 function step3_highRisk(x, metsRes){
-  // Figure 1 Step 3 high-risk definitions.
-  // Requires ability to classify IFG/IGT, 1h PG >155, MetS, A1c 6.0–6.4, and/or IGI and/or 1st-phase.
-
-  const g0 = x.g0;
-  const g60 = x.g60;
-  const g120 = x.g120;
-
-  const ifg = (g0 != null && g0 >= 100 && g0 < 126);
-  const igt = (g120 != null && g120 >= 140 && g120 < 200);
-  const oneHr = (g60 != null && g60 > 155);
-
+  const ifg = (x.g0 != null && x.g0 >= 100 && x.g0 < 126);
+  const igt = (x.g120 != null && x.g120 >= 140 && x.g120 < 200);
+  const oneHr = (x.g60 != null && x.g60 > 155);
   const a1c6064 = (x.a1c != null && x.a1c >= 6.0 && x.a1c <= 6.4);
 
   const igi = calc_igi(x);
   const igiLow = (igi != null && igi <= 0.82);
 
-  // 1st-phase threshold exists in the figure (≤899 pmol/L) but no formula supplied.
-  // We cannot compute it without the coefficients.
   const stum1 = calc_stumvoll1(x);
   const stumLow = (stum1 != null && stum1 <= 899);
 
   const metsPresent = metsRes.present;
-  const metsKnown = metsRes.complete;
-
   const triggers = [];
 
-  // • IGT + 1-hour PG >155 + metabolic syndrome
   if(igt && oneHr && metsPresent) triggers.push('IGT + 1-hour PG >155 mg/dL + metabolic syndrome');
-
-  // • Combined IFG and IGT
   if(ifg && igt) triggers.push('Combined IFG and IGT');
-
-  // • IFG + 1-hour PG >155 + metabolic syndrome
   if(ifg && oneHr && metsPresent) triggers.push('IFG + 1-hour PG >155 mg/dL + metabolic syndrome');
-
-  // • IGT or IFG + 1-hour PG >155 + HbA1c 6.0–6.4
   if((igt || ifg) && oneHr && a1c6064) triggers.push('IGT or IFG + 1-hour PG >155 mg/dL + HbA1c 6.0–6.4%');
 
-  // • IGT or IFG + 1-hour PG >155 + IGI ≤0.82 and/or 1st-phase ≤899
   if((igt || ifg) && oneHr && (igiLow || stumLow)) {
     const sub = [];
     if(igiLow) sub.push('IGI ≤0.82');
@@ -494,24 +468,15 @@ function step3_highRisk(x, metsRes){
     triggers.push(`IGT or IFG + 1-hour PG >155 mg/dL + ${sub.join(' and ')}`);
   }
 
-  // Determine evaluability: the user may not have provided enough info.
-  // High-risk should only be asserted if the needed components for a triggered rule are known.
-  // We conservatively treat metabolic syndrome as "unknown" unless complete.
-
-  const anyHighRisk = triggers.length > 0;
-
-  // meta status
-  const status = (anyHighRisk) ? 'HIGH_RISK' : 'NOT_HIGH_RISK';
-
   return {
-    status,
+    status: triggers.length ? 'HIGH_RISK' : 'NOT_HIGH_RISK',
     triggers,
     ifg, igt, oneHr,
     a1c6064,
     igi, igiLow,
     stum1, stumLow,
     metsPresent,
-    metsKnown,
+    metsKnown: metsRes.complete,
   };
 }
 
@@ -521,78 +486,59 @@ function step4_recommendation(x, step3){
   }
   if(x.age == null) return { applicable:true, badge:{kind:'warn',text:'Age needed'}, text:'Enter age to apply Step 4.' };
 
-  if(x.age < 40) {
-    return { applicable:true, badge:{kind:'bad',text:'<40'}, text:'Age <40 years — Not a candidate (high risk).' };
-  }
-  if(x.age >= 40 && x.age <= 49) {
-    return { applicable:true, badge:{kind:'warn',text:'40–49'}, text:'Age 40–49 years — Consider only if able to reverse high-risk prognostic markers with weight loss on repeat OGTT.' };
-  }
+  if(x.age < 40) return { applicable:true, badge:{kind:'bad',text:'<40'}, text:'Age <40 years — Not a candidate (high risk).' };
+  if(x.age <= 49) return { applicable:true, badge:{kind:'warn',text:'40–49'}, text:'Age 40–49 years — Consider only if able to reverse high-risk prognostic markers with weight loss on repeat OGTT.' };
   return { applicable:true, badge:{kind:'good',text:'≥50'}, text:'Age ≥50 years — Can be accepted after risk mitigation with 5–10% weight loss.' };
 }
 
 // ---------- UI update ----------
-
 function updateUnitLabels(){
   const mode = state.unitMode;
-  $('unitLabel').textContent = mode;
+  if($('unitLabel')) $('unitLabel').textContent = mode;
 
-  $('weightLabel').textContent = `Weight (${mode === 'US' ? 'lb' : 'kg'})`;
-  $('heightLabel').textContent = `Height (${mode === 'US' ? 'in' : 'cm'})`;
-  $('waistLabel').textContent  = `Waist circumference (${mode === 'US' ? 'in' : 'cm'})`;
+  if($('weightLabel')) $('weightLabel').textContent = `Weight (${mode === 'US' ? 'lb' : 'kg'})`;
+  if($('heightLabel')) $('heightLabel').textContent = `Height (${mode === 'US' ? 'in' : 'cm'})`;
+  if($('waistLabel'))  $('waistLabel').textContent  = `Waist circumference (${mode === 'US' ? 'in' : 'cm'})`;
 
-  $('tgLabel').textContent  = `Triglycerides (${mode === 'US' ? 'mg/dL' : 'mmol/L'})`;
-  $('hdlLabel').textContent = `HDL (${mode === 'US' ? 'mg/dL' : 'mmol/L'})`;
+  if($('tgLabel'))  $('tgLabel').textContent  = `Triglycerides (${mode === 'US' ? 'mg/dL' : 'mmol/L'})`;
+  if($('hdlLabel')) $('hdlLabel').textContent = `HDL (${mode === 'US' ? 'mg/dL' : 'mmol/L'})`;
 
   const a1cUnitEl = $('a1cUnit');
   const a1cUnit = a1cUnitEl ? a1cUnitEl.value : 'percent';
-  const a1cLabel = $('a1cLabel');
-  if(a1cLabel){
-    a1cLabel.textContent = `HbA1c (${a1cUnit === 'ifcc' ? 'mmol/mol' : '%'})`;
-  }
+  if($('a1cLabel')) $('a1cLabel').textContent = `HbA1c (${a1cUnit === 'ifcc' ? 'mmol/mol' : '%'})`;
 
-  $('gluLabel').textContent = `Glucose (${mode === 'US' ? 'mg/dL' : 'mmol/L'})`;
-  $('insLabel').textContent = `Insulin (${mode === 'US' ? 'mU/L' : 'pmol/L'})`;
+  if($('gluLabel')) $('gluLabel').textContent = `Glucose (${mode === 'US' ? 'mg/dL' : 'mmol/L'})`;
+  if($('insLabel')) $('insLabel').textContent = `Insulin (${mode === 'US' ? 'µU/mL' : 'pmol/L'})`;
 
-  $('unitPill').innerHTML = `Units: <b id="unitLabel">${mode}</b>`;
-
-  // Ensure placeholders show units (helps prevent "unit not showing" issues)
-  try{
-    const mode = state.unitMode;
-    const w = $('weight'), h = $('height'), wc = $('waist');
-    if(w) w.placeholder  = (mode==='US' ? 'lb' : 'kg');
-    if(h) h.placeholder  = (mode==='US' ? 'in' : 'cm');
-    if(wc) wc.placeholder = (mode==='US' ? 'in' : 'cm');
-  }catch(e){}
-
+  if($('unitPill')) $('unitPill').innerHTML = `Units: <b id="unitLabel">${mode}</b>`;
 }
 
 function toast(msg){
   const t = $('toast');
+  if(!t) return;
   t.textContent = msg;
   t.classList.add('show');
   window.setTimeout(()=>t.classList.remove('show'), 1200);
 }
 
+function escapeHtml(s){
+  return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// ---------- summary ----------
 function buildSummary(x, step1, step2, step3, step4){
   const bmi = step1.bmi;
-  const bmiStr = (bmi == null) ? '—' : `${round(bmi,1)} kg/m²`;
-
-  const metsStr = step2.complete ? (step2.present ? `PRESENT (${step2.count}/5)` : `ABSENT (${step2.count}/5)`) : `UNKNOWN (${step2.count}/5 met; missing: ${step2.unknown.join(', ') || '—'})`;
+  const metsStr = step2.complete
+    ? (step2.present ? `PRESENT (${step2.count}/5)` : `ABSENT (${step2.count}/5)`)
+    : `UNKNOWN (${step2.count}/5 met; missing: ${step2.unknown.join(', ') || '—'})`;
 
   const igiStr = (step3.igi == null) ? '—' : `${round(step3.igi,2)}${step3.igiLow ? ' (≤0.82)' : ''}`;
-
   const stumStr = (step3.stum1 == null) ? '—' : `${round(step3.stum1,0)}${step3.stumLow ? ' (≤899)' : ''}`;
 
   const pgauc = calc_pg_auc_weighted(x);
   const matsuda = calc_matsuda(x);
   const homa = calc_homa_ir(x);
   const di = calc_di(x);
-  const pgaucStr = (pgauc == null) ? '—' : `${round(pgauc,1)} mg·h/dL`;
-  const matsudaStr = (matsuda == null) ? '—' : `${round(matsuda,2)}`;
-  const homaStr = (homa == null) ? '—' : `${round(homa,2)}`;
-  const diStr = (di == null) ? '—' : `${round(di,2)}`;
-
-  const oneHrStr = (step3.oneHr ? 'Yes' : (x.g60==null ? 'Unknown' : 'No'));
 
   const lines = [];
   lines.push('OGTT–DM Risk Stratifier');
@@ -602,27 +548,22 @@ function buildSummary(x, step1, step2, step3, step4){
   lines.push('');
 
   lines.push(`Step 1 (OGTT indication): ${step1.indicated ? 'YES' : 'NO'}`);
-  if(step1.indicated) lines.push(`Reasons: ${step1.reasons.join('; ')}`);
-  else lines.push('Reasons: No Step 1 criteria met based on current inputs.');
+  lines.push(step1.indicated ? `Reasons: ${step1.reasons.join('; ')}` : 'Reasons: No Step 1 criteria met based on current inputs.');
 
   lines.push('');
   lines.push(`Step 2 (Metabolic syndrome): ${metsStr}`);
 
   lines.push('');
   lines.push(`Step 3 (High-risk prognostic markers): ${step3.status === 'HIGH_RISK' ? 'HIGH RISK' : 'Not high-risk'}`);
-  if(step3.status === 'HIGH_RISK') lines.push(`Triggered findings: ${step3.triggers.join('; ')}`);
-  else lines.push('Triggered findings: No Step 3 markers triggered based on current inputs.');
+  lines.push(step3.triggers.length ? `Triggered findings: ${step3.triggers.join('; ')}` : 'Triggered findings: No Step 3 markers triggered based on current inputs.');
 
   lines.push('');
   lines.push('Calculated indices:');
-  lines.push(`- IFG: ${step3.ifg ? 'Yes' : (x.g0==null?'Unknown':'No')}`);
-  lines.push(`- IGT: ${step3.igt ? 'Yes' : (x.g120==null?'Unknown':'No')}`);
-  lines.push(`- 1-hour PG >155 mg/dL: ${oneHrStr}`);
   lines.push(`- IGI: ${igiStr}`);
-  lines.push(`- Matsuda index: ${matsudaStr}`);
-  lines.push(`- HOMA-IR: ${homaStr}`);
-  lines.push(`- Disposition Index (DI): ${diStr}`);
-  lines.push(`- PG AUC (weighted): ${pgaucStr}`);
+  lines.push(`- Matsuda index: ${matsuda == null ? '—' : round(matsuda,2)}`);
+  lines.push(`- HOMA-IR: ${homa == null ? '—' : round(homa,2)}`);
+  lines.push(`- Disposition Index (DI): ${di == null ? '—' : round(di,2)}`);
+  lines.push(`- PG AUC (weighted): ${pgauc == null ? '—' : round(pgauc,1)}`);
   lines.push(`- Stumvoll 1st-phase: ${stumStr}`);
 
   lines.push('');
@@ -631,9 +572,8 @@ function buildSummary(x, step1, step2, step3, step4){
 
   lines.push('');
   lines.push('Disclaimer: Clinical decision support/education tool. No patient data are stored. Use clinical judgment.');
-
   lines.push('');
-  lines.push('Build v5-2026-01-19');
+  lines.push('Build v5-clean');
   lines.push('Designed by Katafan Achkar, MD, FASN. Development assistance: ChatGPT (OpenAI).');
 
   return lines.join('\n');
@@ -644,89 +584,80 @@ function render(){
 
   const x = getInputsCanonical();
 
-  // Step 1
   const step1 = step1_ogttIndication(x);
   const bmi = step1.bmi;
-  if(bmi == null){
-    setBadge($('bmiBadge'), null, {html: 'BMI: <span class="bmiNum">—</span>'});
-  } else {
-    // Style: <25 green, 25–29.9 amber, ≥30 red
-    const k = (bmi >= 30) ? 'bad' : (bmi >= 25 ? 'warn' : 'good');
-    setBadge($('bmiBadge'), k, {html: `BMI: <span class="bmiNum">${round(bmi,1)}</span> <span class="bmiUnit">kg/m²</span>`});
+
+  if($('bmiBadge')){
+    if(bmi == null){
+      setBadge($('bmiBadge'), null, {html: 'BMI: <span class="bmiNum">—</span>'});
+    } else {
+      const k = (bmi >= 30) ? 'bad' : (bmi >= 25 ? 'warn' : 'good');
+      setBadge($('bmiBadge'), k, {html: `BMI: <span class="bmiNum">${round(bmi,1)}</span> <span class="bmiUnit">kg/m²</span>`});
+    }
   }
 
   setBadge($('step1Badge'), step1.indicated ? 'warn' : 'good', step1.indicated ? 'YES' : 'NO');
-  $('step1Reasons').innerHTML = step1.indicated
-    ? `<ul>${step1.reasons.map(r=>`<li>${escapeHtml(r)}</li>`).join('')}</ul>`
-    : `<div class="hint">No Step 1 indication criteria met based on current inputs.</div>`;
+  if($('step1Reasons')){
+    $('step1Reasons').innerHTML = step1.indicated
+      ? `<ul>${step1.reasons.map(r=>`<li>${escapeHtml(r)}</li>`).join('')}</ul>`
+      : `<div class="hint">No Step 1 indication criteria met based on current inputs.</div>`;
+  }
 
-  // Step 2
   const step2 = step2_metabolicSyndrome(x);
   const step2Text = step2.complete
-    ? (step2.present ? `Present (${step2.count}/5)` : `Not present (${step2.count}/5)`) 
+    ? (step2.present ? `Present (${step2.count}/5)` : `Not present (${step2.count}/5)`)
     : `Incomplete (${step2.count}/5 met)`;
   setBadge($('step2Badge'), step2.complete ? (step2.present ? 'bad' : 'good') : 'warn', step2Text);
-  const metsDetail = [];
-  metsDetail.push(`<div class="hint"><b>${step2.count}/5</b> criteria met${step2.complete ? '' : ' (incomplete)'}.</div>`);
-  if(step2.met.length) metsDetail.push(`<div class="hint">Met: ${escapeHtml(step2.met.join(', '))}</div>`);
-  if(step2.notMet.length) metsDetail.push(`<div class="hint">Not met: ${escapeHtml(step2.notMet.join(', '))}</div>`);
-  if(step2.unknown.length) metsDetail.push(`<div class="hint">Missing: ${escapeHtml(step2.unknown.join(', '))}</div>`);
-  $('metsDetail').innerHTML = metsDetail.join('');
 
-  // Step 3
+  if($('metsDetail')){
+    const metsDetail = [];
+    metsDetail.push(`<div class="hint"><b>${step2.count}/5</b> criteria met${step2.complete ? '' : ' (incomplete)'}.</div>`);
+    if(step2.met.length) metsDetail.push(`<div class="hint">Met: ${escapeHtml(step2.met.join(', '))}</div>`);
+    if(step2.notMet.length) metsDetail.push(`<div class="hint">Not met: ${escapeHtml(step2.notMet.join(', '))}</div>`);
+    if(step2.unknown.length) metsDetail.push(`<div class="hint">Missing: ${escapeHtml(step2.unknown.join(', '))}</div>`);
+    $('metsDetail').innerHTML = metsDetail.join('');
+  }
+
   const step3 = step3_highRisk(x, step2);
   setBadge($('step3Badge'), step3.status === 'HIGH_RISK' ? 'bad' : 'good', step3.status === 'HIGH_RISK' ? 'HIGH RISK' : 'Not high-risk');
 
-  const s3 = [];
-  s3.push(`<div class="hint">IFG: <b>${step3.ifg ? 'Yes' : (x.g0==null?'Unknown':'No')}</b> · IGT: <b>${step3.igt ? 'Yes' : (x.g120==null?'Unknown':'No')}</b> · 1-h PG >155: <b>${step3.oneHr ? 'Yes' : (x.g60==null?'Unknown':'No')}</b> · MetS: <b>${step2.complete ? (step2.present?'Yes':'No') : 'Unknown'}</b> · A1c 6.0–6.4: <b>${step3.a1c6064 ? 'Yes' : (x.a1c==null?'Unknown':'No')}</b></div>`);
-  if(step3.triggers.length){
-    s3.push(`<ul>${step3.triggers.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>`);
-  } else {
-    s3.push(`<div class="hint">No Step 3 markers triggered based on current inputs.</div>`);
+  if($('step3Detail')){
+    const s3 = [];
+    if(step3.triggers.length){
+      s3.push(`<ul>${step3.triggers.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>`);
+    } else {
+      s3.push(`<div class="hint">No Step 3 markers triggered based on current inputs.</div>`);
+    }
+    s3.push(`<div class="hint">Stumvoll 1st-phase uses: 1283 + (1.829×I30) − (138.7×G30) + (3.772×I0), insulin in pmol/L and G30 in mmol/L.</div>`);
+    $('step3Detail').innerHTML = s3.join('');
   }
-  // clarify stumvoll behavior
-  s3.push(`<div class="hint">Stumvoll 1st-phase is computed using the user-supplied equation: 1283 + (1.829×I30) − (138.7×G30) + (3.772×I0), with insulin in pmol/L and G30 in mmol/L.</div>`);
 
-  $('step3Detail').innerHTML = s3.join('');
-
-  // Step 4
   const step4 = step4_recommendation(x, step3);
   setBadge($('step4Badge'), step4.badge.kind, step4.badge.text);
-  $('step4Detail').textContent = step4.text;
+  if($('step4Detail')) $('step4Detail').textContent = step4.text;
 
-  // top risk badge
   setBadge($('riskBadge'), step3.status === 'HIGH_RISK' ? 'bad' : 'good', step3.status === 'HIGH_RISK' ? 'High risk' : 'Not high-risk');
 
-  // indices
-  $('igi').textContent = (step3.igi == null) ? '—' : `${round(step3.igi,2)}${step3.igiLow ? ' (≤0.82)' : ''}`;
-  $('stum1').textContent = (step3.stum1 == null) ? '—' : `${round(step3.stum1,0)}${step3.stumLow ? ' (≤899)' : ''}`;
+  if($('igi')) $('igi').textContent = (step3.igi == null) ? '—' : `${round(step3.igi,2)}${step3.igiLow ? ' (≤0.82)' : ''}`;
+  if($('stum1')) $('stum1').textContent = (step3.stum1 == null) ? '—' : `${round(step3.stum1,0)}${step3.stumLow ? ' (≤899)' : ''}`;
 
   const pgauc = calc_pg_auc_weighted(x);
   const matsuda = calc_matsuda(x);
   const homa = calc_homa_ir(x);
   const di = calc_di(x);
+
   if($('pgauc')) $('pgauc').textContent = (pgauc == null) ? '—' : `${round(pgauc,1)}`;
   if($('matsuda')) $('matsuda').textContent = (matsuda == null) ? '—' : `${round(matsuda,2)}`;
   if($('homa')) $('homa').textContent = (homa == null) ? '—' : `${round(homa,2)}`;
   if($('di')) $('di').textContent = (di == null) ? '—' : `${round(di,2)}`;
 
-  $('ifg').textContent = step3.ifg ? 'Yes' : (x.g0==null?'Unknown':'No');
-  $('igt').textContent = step3.igt ? 'Yes' : (x.g120==null?'Unknown':'No');
-  $('onehr').textContent = step3.oneHr ? 'Yes' : (x.g60==null?'Unknown':'No');
-  $('mets').textContent = step2.complete ? (step2.present ? 'Yes' : 'No') : 'Unknown';
-
-  // summary
-  $('summary').textContent = buildSummary(x, step1, step2, step3, step4);
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  if($('summary')) $('summary').textContent = buildSummary(x, step1, step2, step3, step4);
 }
 
 // ---------- persistence helpers ----------
 function snapshot(){
   const ids = [
-    'age','sex','eth','weight','height','waist','tg','hdl','a1c','sbp','dbp','bpMeds',
+    'age','sex','eth','weight','height','waist','tg','hdl','a1c','a1cUnit','sbp','dbp','bpMeds',
     'gdm','pancreatitis','masld','pcos','fdr',
     'g0','g30','g60','g90','g120','i0','i30','i60','i90','i120'
   ];
@@ -740,38 +671,162 @@ function snapshot(){
   return out;
 }
 
-function applySnapshot(snap){
-  if(!snap || !snap.v) return;
-  if(snap.unitMode) {
-    state.unitMode = snap.unitMode;
-    $('unitMode').value = snap.unitMode;
-  }
-  Object.entries(snap.v).forEach(([id,val])=>{
-    const el = $(id);
-    if(!el) return;
-    if(el.type === 'checkbox') el.checked = !!val;
-    else el.value = val;
-  });
-}
-
 function saveToLocal(key, obj){
   localStorage.setItem(key, JSON.stringify(obj));
 }
 
-function loadFromLocal(key){
-  try{
-    const s = localStorage.getItem(key);
-    if(!s) return null;
-    return JSON.parse(s);
-  } catch { return null; }
+// ---------- CSV EXPORT (as-entered) ----------
+function requireIdentifiersForExport(){
+  const include = $('includePt');
+  if(!include) return true;
+  if(!include.checked) include.checked = true;
+
+  const name = $('ptName') ? String($('ptName').value || '').trim() : '';
+  const mrn  = $('ptMRN') ? String($('ptMRN').value || '').trim() : '';
+  const dob  = $('ptDOB') ? String($('ptDOB').value || '').trim() : '';
+  const tdate = $('testDate') ? String($('testDate').value || '').trim() : '';
+
+  if(!name || !mrn || !dob || !tdate){
+    toast('Enter Name, MRN, DOB, and OGTT test date to export locally.');
+    return false;
+  }
+  return true;
 }
+
+function buildCsvRow(){
+  const x = getInputsCanonical();
+
+  const MODE = String(state.unitMode || '').trim().toUpperCase();
+  const A1C_UNIT_SEL = String(sel('a1cUnit') || 'percent').trim().toLowerCase();
+
+  const step1 = step1_ogttIndication(x);
+  const bmi = step1 ? step1.bmi : null;
+  const step2 = step2_metabolicSyndrome(x);
+  const step3 = step3_highRisk(x, step2);
+  const step4 = step4_recommendation(x, step3);
+
+  // identifiers + date of service
+  const NAME = $('ptName') ? String($('ptName').value || '').trim() : '';
+  const MRN  = $('ptMRN') ? String($('ptMRN').value || '').trim() : '';
+  const DOB  = $('ptDOB') ? String($('ptDOB').value || '').trim() : '';
+  const OGTT_TEST_DATE = $('testDate') ? String($('testDate').value || '').trim() : '';
+  const VISIT_TYPE = $('visitType') ? String($('visitType').value || '').trim() : '';
+  const ORDERING_PROVIDER = $('orderingProvider') ? String($('orderingProvider').value || '').trim() : '';
+
+  // raw typed values (exactly as entered)
+  const WEIGHT_RAW = $('weight') ? String($('weight').value || '').trim() : '';
+  const HEIGHT_RAW = $('height') ? String($('height').value || '').trim() : '';
+  const WAIST_RAW  = $('waist') ? String($('waist').value || '').trim() : '';
+  const TG_RAW     = $('tg') ? String($('tg').value || '').trim() : '';
+  const HDL_RAW    = $('hdl') ? String($('hdl').value || '').trim() : '';
+  const A1C_RAW    = $('a1c') ? String($('a1c').value || '').trim() : '';
+
+  const G0_RAW   = $('g0')   ? String($('g0').value   || '').trim() : '';
+  const G30_RAW  = $('g30')  ? String($('g30').value  || '').trim() : '';
+  const G60_RAW  = $('g60')  ? String($('g60').value  || '').trim() : '';
+  const G90_RAW  = $('g90')  ? String($('g90').value  || '').trim() : '';
+  const G120_RAW = $('g120') ? String($('g120').value || '').trim() : '';
+
+  const I0_RAW   = $('i0')   ? String($('i0').value   || '').trim() : '';
+  const I30_RAW  = $('i30')  ? String($('i30').value  || '').trim() : '';
+  const I60_RAW  = $('i60')  ? String($('i60').value  || '').trim() : '';
+  const I90_RAW  = $('i90')  ? String($('i90').value  || '').trim() : '';
+  const I120_RAW = $('i120') ? String($('i120').value || '').trim() : '';
+
+  const SUMMARY = normalizeForCsv($('summary') ? $('summary').textContent.trim() : '');
+  const RECOMMENDATION = normalizeForCsv(step4 ? step4.text : '');
+  const HIGH_RISK_TRIGGERS = normalizeForCsv(step3 && step3.triggers ? step3.triggers.join(' | ') : '');
+
+  const row = {
+    OGTT_TEST_DATE,
+    UNIT_MODE: MODE,
+    NAME, MRN, DOB, VISIT_TYPE, ORDERING_PROVIDER,
+
+    AGE_YEARS: x.age,
+    SEX: x.sex,
+    ETHNICITY: x.eth,
+
+    WEIGHT_RAW,
+    HEIGHT_RAW,
+    WAIST_RAW,
+
+    WEIGHT_KG: x.weightKg,
+    HEIGHT_CM: x.heightCm,
+    WAIST_CM: x.waistCm,
+    BMI: bmi,
+
+    SBP: x.sbp,
+    DBP: x.dbp,
+    BP_MEDS: x.bpMeds,
+
+    TG_RAW,
+    HDL_RAW,
+
+    TG_MGDL: x.tgMgdl,
+    HDL_MGDL: x.hdlMgdl,
+
+    // Export A1c exactly as entered + unit label
+    A1C: A1C_RAW,
+    A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
+
+    // Export OGTT exactly as entered (prevents unit flipping)
+    G0: G0_RAW, G30: G30_RAW, G60: G60_RAW, G90: G90_RAW, G120: G120_RAW,
+    I0: I0_RAW, I30: I30_RAW, I60: I60_RAW, I90: I90_RAW, I120: I120_RAW,
+
+    GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
+    INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
+
+    // indices (computed from canonical)
+    IGI: calc_igi(x),
+    STUMVOLL_1ST_PHASE: calc_stumvoll1(x),
+    PG_AUC_WEIGHTED: calc_pg_auc_weighted(x),
+    MATSUDA: calc_matsuda(x),
+    HOMA_IR: calc_homa_ir(x),
+    DI: calc_di(x),
+
+    METS_COUNT: step2 ? step2.count : '',
+    METS_PRESENT: step2 ? step2.present : '',
+
+    IFG: step3 ? step3.ifg : '',
+    IGT: step3 ? step3.igt : '',
+    ONE_HR_PG_GT_155: step3 ? step3.oneHr : '',
+    A1C_6_0_TO_6_4: step3 ? step3.a1c6064 : '',
+    IGI_LOW: step3 ? step3.igiLow : '',
+    STUMVOLL1_LOW: step3 ? step3.stumLow : '',
+    HIGH_RISK_STATUS: step3 ? step3.status : '',
+    HIGH_RISK: step3 ? (step3.status === 'HIGH_RISK') : '',
+    HIGH_RISK_TRIGGERS,
+
+    RECOMMENDATION,
+    SUMMARY
+  };
+
+  const headers = Object.keys(row);
+  const values = headers.map(h => (row[h]===null || row[h]===undefined) ? '' : row[h]);
+  return {headers, values};
+}
+
+function exportCsvAll(){
+  try{
+    if(typeof requireIdentifiersForExport === 'function' && !requireIdentifiersForExport()) return;
+    const {headers, values} = buildCsvRow();
+    const csv = headers.map(csvEscape).join(',') + '\n' + values.map(csvEscape).join(',') + '\n';
+    const stamp = (new Date().toISOString().slice(0,10));
+    downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
+    toast('CSV downloaded');
+  }catch(e){
+    console.error(e);
+    toast('CSV export error - see Console');
+  }
+}
+window.exportCsvAll = exportCsvAll;
 
 // ---------- events ----------
 function wire(){
-  // CSV button safe wire (never blocks calculator)
+  // CSV button
   try{
     const b = $('downloadCsv');
-    if(b && typeof exportCsvAll === 'function') b.addEventListener('click', exportCsvAll);
+    if(b) b.addEventListener('click', exportCsvAll);
   }catch(e){ console.error('CSV wire error', e); }
 
   // default test date = today
@@ -791,304 +846,56 @@ function wire(){
     });
   });
 
-  $('unitMode').addEventListener('change', (e)=>{
-    const newMode = e.target.value;
-    const oldMode = state.unitMode;
-    if(newMode && oldMode && newMode !== oldMode){
-      convertBaselineFields(oldMode, newMode);
-      convertOgttFields(oldMode, newMode);
-    }
-    state.unitMode = newMode;
-    saveToLocal('ogtt_fresh_current', snapshot());
-    render();
-  });
-
-  
-  // --- Patient identifiers (print/copy only; not stored) ---
-  function patientHeaderText(){
-    const include = $('includePt');
-    if(!include || !include.checked) return '';
-    const name = $('ptName') ? String($('ptName').value || '').trim() : '';
-    const mrn  = $('ptMRN') ? String($('ptMRN').value || '').trim() : '';
-    const dob  = $('ptDOB') ? String($('ptDOB').value || '').trim() : '';
-
-    const tdate = $('testDate') ? String($('testDate').value || '').trim() : '';
-    if(!name && !mrn && !dob) return '';
-
-    let out = 'Patient identifiers:\n';
-    if(name) out += 'Name: ' + name + '\n';
-    if(mrn)  out += 'MRN: ' + mrn + '\n';
-    if(dob)  out += 'DOB: ' + dob + '\n';
-    if(tdate) out += 'OGTT date: ' + tdate + '\n';
-    out += '\n';
-    return out;
-  }
-
-  function requireIdentifiersForExport(){
-    const name = $('ptName') ? String($('ptName').value || '').trim() : '';
-    const mrn  = $('ptMRN') ? String($('ptMRN').value || '').trim() : '';
-    const dob  = $('ptDOB') ? String($('ptDOB').value || '').trim() : '';
-    const tdate = $('testDate') ? String($('testDate').value || '').trim() : '';
-    const include = $('includePt');
-
-    if(!include) return true;
-    if(!include.checked) include.checked = true;
-
-    if(!name || !mrn || !dob || !tdate){
-      toast('Enter Name, MRN, DOB, and OGTT test date to export/print locally.');
-      if(!name && $('ptName')) $('ptName').focus();
-      else if(!mrn && $('ptMRN')) $('ptMRN').focus();
-      else if(!dob && $('ptDOB')) $('ptDOB').focus();
-      else if(!tdate && $('testDate')) $('testDate').focus();
-      return false;
-    }
-
-
-  // --- CSV export (append-ready; includes all inputs + indices) ---
-  function fmtNum(v, d){
-      if(v===null || v===undefined) return '';
-      if(typeof v === 'number' && isFinite(v)) return v.toFixed(d==null?4:d);
-      const n = Number(v);
-      if(!isNaN(n) && isFinite(n)) return n.toFixed(d==null?4:d);
-      return v;
-    }
-
-    function normalizeForCsv(s){
-    if(s===null || s===undefined) return '';
-    return String(s)
-      .replace(/\u2265/g, '>=')
-      .replace(/[\u2013\u2014]/g, '-')
-      .replace(/\u00a0/g, ' ');
-  }
-
-  function csvEscape(v){
-    const s = (v===null || v===undefined) ? '' : String(v);
-    if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
-    return s;
-  }
-
-  function downloadTextFile(filename, mime, content){
-    // Add UTF-8 BOM for CSV so Excel renders symbols correctly
-    const BOM = '\ufeff';
-    const payload = (mime && mime.indexOf('text/csv') === 0) ? (BOM + content) : content;
-    const blob = new Blob([payload], {type:mime});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 1500);
-  }
-    function glucoseForExport(mgdl){
-    if(mgdl == null) return null;
-    return (state.unitMode === 'SI') ? (mgdl / 18) : mgdl;
-  }
-
-    function buildCsvRow(){
-    const x = getInputsCanonical();
-  
-    const MODE = String(state.unitMode || '').trim().toUpperCase();
-    const A1C_UNIT_SEL = String(sel('a1cUnit') || 'percent').trim().toLowerCase();
-    const step1 = step1_ogttIndication(x);
-    const bmi = step1 ? step1.bmi : null;
-    const step2 = step2_metabolicSyndrome(x);
-    const step3 = step3_highRisk(x, step2);
-    const step4 = step4_recommendation(x, step3);
-
-    // calculated indices
-    const IGI = calc_igi(x);
-    const STUMVOLL_1ST_PHASE = calc_stumvoll1(x);
-    const PG_AUC_WEIGHTED = calc_pg_auc_weighted(x);
-    const MATSUDA = calc_matsuda(x);
-    const HOMA_IR = calc_homa_ir(x);
-    const DI = calc_di(x);
-
-    // identifiers + date of service
-    const NAME = $('ptName') ? String($('ptName').value || '').trim() : '';
-    const MRN  = $('ptMRN') ? String($('ptMRN').value || '').trim() : '';
-    const DOB  = $('ptDOB') ? String($('ptDOB').value || '').trim() : '';
-    const OGTT_TEST_DATE = $('testDate') ? String($('testDate').value || '').trim() : '';
-    const VISIT_TYPE = $('visitType') ? String($('visitType').value || '').trim() : '';
-    const ORDERING_PROVIDER = $('orderingProvider') ? String($('orderingProvider').value || '').trim() : '';
-
-    // raw typed values (exactly as entered)
-    const WEIGHT_RAW = $('weight') ? String($('weight').value || '').trim() : '';
-    const HEIGHT_RAW = $('height') ? String($('height').value || '').trim() : '';
-    const WAIST_RAW  = $('waist') ? String($('waist').value || '').trim() : '';
-    const TG_RAW     = $('tg') ? String($('tg').value || '').trim() : '';
-    const HDL_RAW    = $('hdl') ? String($('hdl').value || '').trim() : '';
-    const A1C_RAW    = $('a1c') ? String($('a1c').value || '').trim() : '';
-    
-    // raw typed OGTT values (exactly as entered)
-    const G0_RAW   = $('g0')   ? String($('g0').value   || '').trim() : '';
-    const G30_RAW  = $('g30')  ? String($('g30').value  || '').trim() : '';
-    const G60_RAW  = $('g60')  ? String($('g60').value  || '').trim() : '';
-    const G90_RAW  = $('g90')  ? String($('g90').value  || '').trim() : '';
-    const G120_RAW = $('g120') ? String($('g120').value || '').trim() : '';
-
-    const I0_RAW   = $('i0')   ? String($('i0').value   || '').trim() : '';
-    const I30_RAW  = $('i30')  ? String($('i30').value  || '').trim() : '';
-    const I60_RAW  = $('i60')  ? String($('i60').value  || '').trim() : '';
-    const I90_RAW  = $('i90')  ? String($('i90').value  || '').trim() : '';
-    const I120_RAW = $('i120') ? String($('i120').value || '').trim() : '';
-    const SUMMARY = normalizeForCsv($('summary') ? $('summary').textContent.trim() : '');
-    const RECOMMENDATION = normalizeForCsv(step4 ? step4.text : '');
-    const HIGH_RISK_TRIGGERS = normalizeForCsv(step3 && step3.triggers ? step3.triggers.join(' | ') : '');
-
-    const row = {
-      OGTT_TEST_DATE,
-      UNIT_MODE: state.unitMode || '',
-      NAME,
-      MRN,
-      DOB,
-      VISIT_TYPE,
-      ORDERING_PROVIDER,
-
-      AGE_YEARS: x.age,
-      SEX: x.sex,
-      ETHNICITY: x.eth,
-
-      WEIGHT_RAW,
-      HEIGHT_RAW,
-      WAIST_RAW,
-      WEIGHT_KG: x.weight,
-      HEIGHT_CM: x.height,
-      WAIST_CM: x.waist,
-      BMI: bmi,
-
-      SBP: x.sbp,
-      DBP: x.dbp,
-      BP_MEDS: x.bpMeds,
-
-      TG_RAW,
-      HDL_RAW,
-
-      TG: x.tg,
-      HDL: x.hdl,
-
-     // Export A1c exactly as entered + unit label
-      A1C: A1C_RAW,
-      A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
-
-      // Export OGTT exactly as entered (prevents unit flipping)
-      G0: G0_RAW, G30: G30_RAW, G60: G60_RAW, G90: G90_RAW, G120: G120_RAW,
-      I0: I0_RAW, I30: I30_RAW, I60: I60_RAW, I90: I90_RAW, I120: I120_RAW,
-
-      GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
-      INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
-      IGI,
-      STUMVOLL_1ST_PHASE,
-      PG_AUC_WEIGHTED,
-      MATSUDA,
-      HOMA_IR,
-      DI,
-
-      METS_COUNT: step2 ? step2.count : '',
-      METS_PRESENT: step2 ? step2.present : '',
-
-      IFG: step3 ? step3.ifg : '',
-      IGT: step3 ? step3.igt : '',
-      ONE_HR_PG_GT_155: step3 ? step3.oneHr : '',
-      A1C_6_0_TO_6_4: step3 ? step3.a1c6064 : '',
-      IGI_LOW: step3 ? step3.igiLow : '',
-      STUMVOLL1_LOW: step3 ? step3.stumLow : '',
-      HIGH_RISK_STATUS: step3 ? step3.status : '',
-      HIGH_RISK: step3 ? (step3.status === 'HIGH_RISK') : '',
-      HIGH_RISK_TRIGGERS,
-
-      RECOMMENDATION,
-      SUMMARY
-    };
-
-    const headers = Object.keys(row);
-    const values = headers.map(h => (row[h]===null || row[h]===undefined) ? '' : row[h]);
-    return {headers, values};
-  }
-
-  function exportCsvAll(){
-    try{
-    if(typeof requireIdentifiersForExport === 'function' && !requireIdentifiersForExport()) return;
-    const {headers, values} = buildCsvRow();
-    const csv = headers.map(csvEscape).join(',') + '\n' + values.map(csvEscape).join(',') + '\n';
-    const stamp = (new Date().toISOString().slice(0,10));
-  
-    downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
-    toast('CSV downloaded');
-    }catch(e){ console.error(e); toast('CSV export error - see Console'); }
-
-  }
-  // expose for inline onclick
-  window.exportCsvAll = exportCsvAll;
-
-
-    return true;
-  }
-
-
-
-  function updatePrintHeader(){
-    const header = $('printHeader');
-    if(!header) return;
-    const txt = patientHeaderText();
-    header.textContent = txt ? (txt + 'Generated: ' + new Date().toLocaleString()) : '';
-    // If no identifiers, keep it visually minimal on print
-    if(!txt) header.textContent = '';
-  }
-
-$('copySummary').addEventListener('click', async ()=>{
-    try{
-      await navigator.clipboard.writeText(patientHeaderText() + $('summary').textContent);
-      toast('Summary copied');
-    } catch {
-      toast('Copy failed (browser blocked)');
-    }
-  });
-
-  $('print').addEventListener('click', ()=>{ updatePrintHeader(); window.print(); });
-  $('exportPdf').addEventListener('click', ()=>{ updatePrintHeader(); window.print(); });
-  // Keep print header updated as patient fields change (calculator page only)
-  ['includePt','ptName','ptMRN','ptDOB','testDate'].forEach(id=>{
-    const el = $(id);
-    if(el) el.addEventListener('input', updatePrintHeader);
-    if(el && el.type === 'checkbox') el.addEventListener('change', updatePrintHeader);
-  });
-
-
-
-    const _sb = $('saveBaseline');
-  if(_sb){
-    _sb.addEventListener('click', ()=>{
-      saveToLocal('ogtt_fresh_baseline', snapshot());
-      toast('Baseline saved');
+  const unitEl = $('unitMode');
+  if(unitEl){
+    unitEl.addEventListener('change', (e)=>{
+      const newMode = e.target.value;
+      const oldMode = state.unitMode;
+      if(newMode && oldMode && newMode !== oldMode){
+        convertBaselineFields(oldMode, newMode);
+        convertOgttFields(oldMode, newMode);
+      }
+      state.unitMode = newMode;
+      saveToLocal('ogtt_fresh_current', snapshot());
+      render();
     });
   }
 
-$('clear').addEventListener('click', ()=>{
-    localStorage.removeItem('ogtt_fresh_current');
-    document.querySelectorAll('input').forEach(i=>{ if(i.type==='checkbox') i.checked=false; else i.value=''; });
-    document.querySelectorAll('select').forEach(s=>{ if(s.id==='unitMode') return; s.value=''; });
-    render();
-    toast('Cleared');
-  });
+  // print/copy wiring (safe)
+  const copyBtn = $('copySummary');
+  if(copyBtn){
+    copyBtn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(($('summary') ? $('summary').textContent : ''));
+        toast('Summary copied');
+      } catch {
+        toast('Copy failed (browser blocked)');
+      }
+    });
+  }
+
+  const clearBtn = $('clear');
+  if(clearBtn){
+    clearBtn.addEventListener('click', ()=>{
+      try{ localStorage.removeItem('ogtt_fresh_current'); }catch(e){}
+      document.querySelectorAll('input').forEach(i=>{ if(i.type==='checkbox') i.checked=false; else i.value=''; });
+      document.querySelectorAll('select').forEach(s=>{ if(s.id==='unitMode') return; s.value=''; });
+      render();
+      toast('Cleared');
+    });
+  }
 }
 
 (function init(){
-  // Auto-clear on reload
   try{ localStorage.removeItem('ogtt_fresh_current'); }catch(e){}
-
-  // load (disabled: auto-clear on reload)
-// default
-  state.unitMode = $('unitMode').value || state.unitMode;
+  const unitEl = $('unitMode');
+  if(unitEl) state.unitMode = unitEl.value || state.unitMode;
   updateUnitLabels();
-
   wire();
   render();
 })();
 
-
-// --- navigation + build stamp helpers (merged into site.js) ---
+// navigation helper
 (function setActiveNav(){
   try{
     const path = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
@@ -1099,210 +906,6 @@ $('clear').addEventListener('click', ()=>{
   }catch(e){}
 })();
 
-(function buildStamp(){
-  const BUILD_ID = 'v5-2026-02-02.1';
-  try{
-    console.log('OGTT site build:', BUILD_ID);
-    const footer = document.querySelector('.footer') || document.querySelector('.site-footer') || document.querySelector('.footerNote:last-of-type');
-    if(footer && !footer.querySelector('[data-build]')){
-      const s = document.createElement('div');
-      s.setAttribute('data-build','1');
-      s.style.marginTop = '6px';
-      s.style.opacity = '0.85';
-      s.style.fontSize = '12px';
-      s.textContent = 'Build ' + BUILD_ID;
-      footer.appendChild(s);
-    }
-  }catch(e){}
-})();
-
 function toggleAllAccordions(open){
   document.querySelectorAll('details.accordion').forEach(d=> d.open = !!open);
 }
-
-
-  // ===========================
-  // Guaranteed CSV download (HardFix)
-  // ===========================
-  (function(){
-    function setCsvStatus(msg){
-      const el = document.getElementById('csvStatus');
-      if(el) el.textContent = msg || '';
-    }
-    function safeToast(msg){
-      try{ if(typeof toast === 'function') toast(msg); else alert(msg); }
-      catch(e){ alert(msg); }
-    }
-    function csvEscape(v){
-      const s = (v===null || v===undefined) ? '' : String(v);
-      if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
-      return s;
-    }
-    function downloadTextFile(filename, mime, content){
-  const BOM = '\ufeff'; // for Excel
-  const payload = (mime && mime.indexOf('text/csv') === 0) ? (BOM + content) : content;
-  const blob = new Blob([payload], {type:mime});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=> URL.revokeObjectURL(url), 1500);
-}
-
-function normalizeForCsv(s){
-  if(s===null || s===undefined) return '';
-  return String(s)
-    .replace(/\u2265/g, '>=')
-    .replace(/[\u2013\u2014]/g, '-')
-    .replace(/\u00a0/g, ' ');
-}
-
-function getVal(id){
-  const el = document.getElementById(id);
-  return el ? String(el.value || '').trim() : '';
-}
-
-function requireIds(){
-  // Your current UI uses ptName/ptMRN/ptDOB/testDate
-  const name = getVal('ptName');
-  const mrn  = getVal('ptMRN');
-  const dob  = getVal('ptDOB');
-  const tdt  = getVal('testDate');
-  if(!name || !mrn || !dob || !tdt){
-    safeToast('Enter Name, MRN, DOB, and OGTT test date to download CSV.');
-    return false;
-  }
-  return true;
-}
-
-// Collect ALL input fields present on the page (keeps future-proof)
-function collectAllInputs(){
-  const inputs = Array.from(document.querySelectorAll('input, select, textarea'));
-  const pairs = [];
-  for(const el of inputs){
-    if(!el.id) continue;
-    const skipIds = new Set(['ptName','ptMRN','ptDOB','testDate','includePt','downloadCsv','csvStatus']);
-    if(skipIds.has(el.id)) continue;
-    if(el.type === 'button' || el.type === 'submit' || el.type === 'hidden') continue;
-
-    let key = el.id.toUpperCase();
-    if(el.id === 'eth') key = 'ETHNICITY';
-
-    let val = '';
-    if(el.tagName.toLowerCase() === 'select') val = el.value;
-    else if(el.type === 'checkbox') val = el.checked ? 'TRUE' : 'FALSE';
-    else val = el.value;
-
-    pairs.push([key, val]);
-  }
-  return pairs;
-}
-
-// Pull key computed values if the functions exist, without breaking anything
-function collectComputed(){
-  const out = [];
-  try{
-    if(typeof getInputsCanonical === 'function'){
-      const x = getInputsCanonical();
-      if(x){
-        if(x.weight!=null) out.push(['WEIGHT_KG', x.weight]);
-        if(x.height!=null) out.push(['HEIGHT_CM', x.height]);
-        if(x.waist!=null) out.push(['WAIST_CM', x.waist]);
-        if(x.tg!=null) out.push(['TG', x.tg]);
-        if(x.hdl!=null) out.push(['HDL', x.hdl]);
-        if(x.a1c!=null) out.push(['A1C_CANON', x.a1c]);
-
-        ['g0','g30','g60','g90','g120','i0','i30','i60','i90','i120'].forEach(k=>{
-          if(x[k]!=null) out.push([(`${k}_CANON`).toUpperCase(), x[k]]);
-        });
-
-        if(typeof calc_homa_ir === 'function') out.push(['HOMA_IR', fmtNum(calc_homa_ir(x), 4)]);
-        if(typeof calc_matsuda === 'function') out.push(['MATSUDA', fmtNum(calc_matsuda(x), 4)]);
-        if(typeof calc_igi === 'function') out.push(['IGI', fmtNum(calc_igi(x), 4)]);
-        if(typeof calc_di === 'function') out.push(['DI', fmtNum(calc_di(x), 4)]);
-        if(typeof calc_pg_auc_weighted === 'function') out.push(['PG_AUC_WEIGHTED', fmtNum(calc_pg_auc_weighted(x), 4)]);
-        if(typeof calc_stumvoll1 === 'function') out.push(['STUMVOLL_1ST_PHASE', fmtNum(calc_stumvoll1(x), 4)]);
-      }
-    }
-  }catch(e){
-    console.error('compute export error', e);
-  }
-
-  try{
-    const recEl = document.getElementById('recommendation');
-    if(recEl) out.push(['RECOMMENDATION', normalizeForCsv(recEl.textContent.trim())]);
-  }catch(e){}
-
-  try{
-    if(typeof getInputsCanonical === 'function' && typeof step2_metabolicSyndrome === 'function' && typeof step3_highRisk === 'function'){
-      const x = getInputsCanonical();
-      const ms = step2_metabolicSyndrome(x);
-      const hr = step3_highRisk(x, ms);
-      if(hr){
-        const parts = [];
-        if(hr.ifg) parts.push('IFG');
-        if(hr.igt) parts.push('IGT');
-        if(hr.oneHr) parts.push('1H_PG>155');
-        if(hr.a1c6064) parts.push('A1C_6.0-6.4');
-        if(hr.igiLow) parts.push('IGI_LOW');
-        if(hr.stumLow) parts.push('STUMVOLL_LOW');
-        out.push(['HIGH_RISK_COMBINATION', parts.join('+')]);
-      }
-    }
-  }catch(e){ console.error('risk combo export error', e); }
-
-  return out;
-}
-
-// SIMPLE CSV EXPORT: exports exactly what is in the input boxes (no unit flipping)
-window.downloadCsvSafe = function(){
-  try{
-    setCsvStatus('Preparing...');
-
-    // If you want to REQUIRE identifiers, keep this line.
-//  if(!requireIds()) { setCsvStatus(''); return; }
-
-    const MODE = String((window.state && state.unitMode) || getVal('unitMode') || '').trim().toUpperCase();
-    const A1C_UNIT_SEL = String(getVal('a1cUnit') || 'percent').trim().toLowerCase();
-
-    const rowObj = {
-      UNIT_MODE: MODE,
-
-      // As-entered / on-screen values
-      A1C: getVal('a1c'),
-      A1C_UNITS: (A1C_UNIT_SEL === 'ifcc') ? 'mmol/mol' : '%',
-
-      G0: getVal('g0'),   G30: getVal('g30'), G60: getVal('g60'), G90: getVal('g90'), G120: getVal('g120'),
-      GLUCOSE_UNITS: (MODE === 'SI') ? 'mmol/L' : 'mg/dL',
-
-      I0: getVal('i0'),   I30: getVal('i30'), I60: getVal('i60'), I90: getVal('i90'), I120: getVal('i120'),
-      INSULIN_UNITS: (MODE === 'SI') ? 'pmol/L' : 'µU/mL',
-    };
-
-    const headers = Object.keys(rowObj);
-
-    const csvEscape = (v) => {
-      const s = (v === null || v === undefined) ? '' : String(v);
-      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
-    };
-
-    const csv =
-      headers.map(csvEscape).join(',') + '\n' +
-      headers.map(h => csvEscape(rowObj[h])).join(',') + '\n';
-
-    const stamp = (new Date().toISOString().slice(0,10));
-    downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
-
-    setCsvStatus('CSV downloaded');
-    return;
-  }catch(e){
-    console.error('CSV download failed', e);
-    setCsvStatus('Failed.');
-    safeToast('CSV download failed. See Console for details.');
-  }finally{
-    setTimeout(()=> setCsvStatus(''), 2500);
-  }
-};
