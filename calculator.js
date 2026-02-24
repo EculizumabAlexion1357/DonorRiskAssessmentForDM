@@ -1019,6 +1019,7 @@ function wire(){
     const {headers, values} = buildCsvRow();
     const csv = headers.map(csvEscape).join(',') + '\n' + values.map(csvEscape).join(',') + '\n';
     const stamp = (new Date().toISOString().slice(0,10));
+    toast('unitMode=' + state.unitMode);
     downloadTextFile(`OGTT_Risk_${stamp}.csv`, 'text/csv;charset=utf-8', csv);
     toast('CSV downloaded');
     }catch(e){ console.error(e); toast('CSV export error - see Console'); }
