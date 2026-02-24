@@ -938,6 +938,40 @@ function wire(){
       saveToLocal('ogtt_fresh_current', snapshot());
       render();
     });
+      // ----- COPY SUMMARY -----
+  const copyBtn = $('copySummary');
+  if(copyBtn){
+    copyBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const s = $('summary');
+      if(!s || !s.textContent){
+        toast('Summary empty');
+        return;
+      }
+      navigator.clipboard.writeText(s.textContent)
+        .then(()=> toast('Summary copied'))
+        .catch(()=>{
+          toast('Clipboard blocked');
+        });
+    });
+  }
+
+  // ----- PRINT / EXPORT PDF -----
+  const pdfBtn = $('exportPdf');
+  if(pdfBtn){
+    pdfBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      window.print();
+    });
+  }
+
+  const printBtn = $('print');
+  if(printBtn){
+    printBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      window.print();
+    });
+  }
   }
 
   const clearBtn = $('clear');
