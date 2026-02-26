@@ -614,6 +614,20 @@ function buildSummary(x, step1, step2, step3, step4){
   const lines = [];
   lines.push('OGTT–DM Risk Stratifier');
   lines.push('—');
+    // Optional patient identifiers (print/copy/PDF only)
+  const includePt = $('includePt') && $('includePt').checked;
+  if(includePt){
+  const ptName = $('ptName') ? String($('ptName').value || '').trim() : '';
+  const ptMRN  = $('ptMRN')  ? String($('ptMRN').value  || '').trim() : '';
+  const ptDOB  = $('ptDOB')  ? String($('ptDOB').value  || '').trim() : '';
+  const tDate  = $('testDate') ? String($('testDate').value || '').trim() : '';
+
+ if(ptName) lines.push(`Patient: ${ptName}`);
+ if(ptMRN)  lines.push(`MRN: ${ptMRN}`);
+ if(ptDOB)  lines.push(`DOB: ${ptDOB}`);
+ if(tDate)  lines.push(`OGTT test date: ${tDate}`);
+ lines.push('—');
+  }
   if(x.age != null) lines.push(`Age: ${x.age}`);
   if(step1.bmi != null) lines.push(`BMI: ${round(step1.bmi,1)} kg/m²`);
   lines.push('');
