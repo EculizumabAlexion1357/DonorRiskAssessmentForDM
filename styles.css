@@ -112,3 +112,13 @@ sup a{color: var(--accent)}
 
 /* SEO additions */
 .home-title{font-size: clamp(2.1rem, 3.2vw, 3rem); font-weight: 900; letter-spacing: .2px;}
+/* Footer email link styling */
+.site-footer a {
+  color: var(--accent);
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+.site-footer a:hover {
+  opacity: 0.85;
+}
