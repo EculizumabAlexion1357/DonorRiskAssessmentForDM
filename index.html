@@ -179,10 +179,44 @@
      
     </div>
 
-    <div class="footer">
-      © <span id="y"></span> Katafan Achkar, MD, FASN
-      <script>document.getElementById("y").textContent = new Date().getFullYear();</script>
-    </div>
+  
+    <footer class="site-footer">
+  <div class="footer-content">
+    <p>
+      <strong>Educational Use Notice:</strong>
+      This clinician-facing tool is intended for educational and decision-support purposes only.
+      It does not replace clinical judgment.
+    </p>
+
+    <p>
+      <strong>Feedback & Corrections:</strong>
+      This platform is continually refined. Comments, suggestions, or reports of potential
+      errors are welcome. Please contact the author at
+      <span id="authorEmail"></span>.
+    </p>
+
+    <p class="footer-meta">
+      © <span id="currentYear"></span> OGTT–DM Risk Stratifier
+    </p>
+  </div>
+</footer>
   </main>
+  <script>
+  (function(){
+    const user = "katafanachkar";
+    const domain = "hotmail.com";
+    const email = user + "@" + domain;
+
+    const emailEl = document.getElementById("authorEmail");
+    if(emailEl){
+      emailEl.innerHTML = '<a href="mailto:' + email + '">' + email + '</a>';
+    }
+
+    const yearEl = document.getElementById("currentYear");
+    if(yearEl){
+      yearEl.textContent = new Date().getFullYear();
+    }
+  })();
+</script>
 </body>
 </html>
