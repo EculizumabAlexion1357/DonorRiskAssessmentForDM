@@ -111,7 +111,7 @@
     @media (max-width: 640px){ .grid2,.grid3{grid-template-columns:1fr;} }
 
     /* OGTT time-point grids (2 vertical columns: Glucose + Insulin) */
-    .ogttCol{max-width:200px; display:flex; flex-direction:column}
+    .ogttCol{max-width:none; display:flex; flex-direction:column}
     .ogttGrid{display:grid; grid-template-columns:1fr; gap:10px; justify-items:start}
     .tp{display:flex; flex-direction:column}
     .tplabel{font-size:11px; color:var(--muted); margin-bottom:4px}
@@ -213,7 +213,7 @@
 
   
     /* --- v5.1 additions: patient identifiers + BMI row width --- */
-    .bmiRow{grid-template-columns:repeat(3, minmax(200px, 1fr)); gap:12px}
+   .bmiRow{grid-template-columns:repeat(3, minmax(140px, 1fr)); gap:12px}
     @media (max-width: 980px){ .bmiRow{grid-template-columns:1fr;} }
 
     .ptCard summary{cursor:pointer; font-weight:700; list-style:none;}
