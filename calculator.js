@@ -945,11 +945,7 @@ function wire(){
       saveToLocal('ogtt_fresh_current', snapshot());
       render();
     });
-    el.addEventListener('change', () => {
-      saveToLocal('ogtt_fresh_current', snapshot());
-      render();
-    });
-  });
+   });
 
   const unitModeEl = $('unitMode');
   if(unitModeEl){
