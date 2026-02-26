@@ -939,11 +939,16 @@ function wire(){
   }catch(e){ console.error('CSV wire error', e); }
 
   // inputs
+ let renderTimer = null;
+function scheduleRender(){
+  if(renderTimer) clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => render(), 50);
+}
   const allInputs = document.querySelectorAll('input,select,textarea');
   allInputs.forEach(el => {
     el.addEventListener('input', () => {
       saveToLocal('ogtt_fresh_current', snapshot());
-      render();
+  scheduleRender();
     });
    });
 
