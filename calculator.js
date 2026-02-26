@@ -883,15 +883,27 @@ function buildCsvRow(){
     HIGH_RISK_TRIGGERS: normalizeForCsv(step3.triggers.join(' | ')),
 
     RECOMMENDATION: normalizeForCsv(step4.text),
-  };
+    };
+    // Optional patient identifiers (only if user opted in)
+    const includePt = $('includePt') && $('includePt').checked;
 
-  const headers = Object.keys(row);
-  const values = headers.map(h => (row[h]===null || row[h]===undefined) ? '' : row[h]);
-  return {headers, values};
-}
+    if (includePt) {
+    row.PATIENT_NAME = $('ptName') ? String($('ptName').value || '').trim() : '';
+    row.MRN = $('ptMRN') ? String($('ptMRN').value || '').trim() : '';
+    row.DOB = $('ptDOB') ? String($('ptDOB').value || '').trim() : '';
+  } else {
+    row.PATIENT_NAME = '';
+    row.MRN = '';
+    row.DOB = '';
+  }
 
-function exportCsvAll(){
-  try{
+    const headers = Object.keys(row);
+    const values = headers.map(h => (row[h]===null || row[h]===undefined) ? '' : row[h]);
+    return {headers, values};
+  }
+
+    function exportCsvAll(){
+    try{
     const {headers, values} = buildCsvRow();
     const csv = headers.map(csvEscape).join(',') + '\n' + values.map(csvEscape).join(',') + '\n';
     const stamp = (new Date().toISOString().slice(0,10));
