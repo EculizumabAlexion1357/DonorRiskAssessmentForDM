@@ -6,9 +6,9 @@
   <meta name="robots" content="index, follow" />
   <title>Important Considerations | Living Kidney Donor Prediabetes Risk Platform</title>
 
-  <!-- Cache-bust CSS and JS so changes show immediately after deploy -->
-  <link rel="stylesheet" href="styles.css?v=3" />
-  <script defer src="calculator.js?v=3"></script>
+  <!-- STRONG cache-bust: change both the query string and (optionally) filename if needed -->
+  <link rel="stylesheet" href="styles.css?v=999" />
+  <script defer src="calculator.js?v=999"></script>
 
   <meta name="description" content="Important considerations and limitations for interpreting OGTT-derived glucose/insulin indices and metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
 
@@ -45,8 +45,9 @@
   }
   </script>
 
-  <!-- SAFE anti-truncation (does NOT touch display) -->
+  <!-- SAFE anti-truncation + FORCE list markers (bullets) -->
   <style>
+    /* Prevent any truncation/clipping */
     .card, .card *{
       overflow: visible !important;
       max-height: none !important;
@@ -55,6 +56,19 @@
       white-space: normal !important;
       text-overflow: clip !important;
     }
+
+    /* Force bullets even if an external stylesheet is stale/cached */
+    .card ul{
+      list-style: disc !important;
+      list-style-position: outside !important;
+      margin: 10px 0 14px 1.25rem !important;
+      padding-left: 1.25rem !important;
+    }
+    .card li{
+      display: list-item !important;
+      margin: 8px 0 !important;
+    }
+    .card li::before{ content: none !important; }
   </style>
 </head>
 
