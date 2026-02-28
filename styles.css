@@ -67,7 +67,7 @@ a:hover{ text-decoration:underline; }
   box-shadow: var(--shadow);
   margin: 14px 0;
 
-  /* Safe: do not clip content */
+  /* Do not clip content */
   overflow: visible;
 }
 
@@ -190,3 +190,24 @@ sup a{ color: var(--accent); }
   outline:2px solid rgba(34,90,160,0.55);
   outline-offset:2px;
 }
+
+/* ------------------------------------
+   HARDENING OVERRIDES (SAFE)
+   These ensure bullets appear even if
+   some other CSS tries to remove them.
+------------------------------------- */
+.card ul{
+  list-style-type: disc !important;
+  list-style-position: outside !important;
+}
+.card ol{
+  list-style-type: decimal !important;
+  list-style-position: outside !important;
+}
+.card li{
+  display: list-item !important;
+}
+
+/* If any dash/marker system is injected elsewhere, neutralize */
+.card li::marker{ color: inherit !important; }
+.card li::before{ content: none !important; }
