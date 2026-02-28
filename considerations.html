@@ -6,15 +6,10 @@
   <meta name="robots" content="index, follow" />
   <title>Important Considerations | Living Kidney Donor Prediabetes Risk Platform</title>
 
-  <!-- Optional: helps some caches behave (safe) -->
   <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
   <meta http-equiv="Pragma" content="no-cache" />
 
-  <!-- IMPORTANT: use a NEW FILENAME to bypass caching completely -->
   <link rel="stylesheet" href="styles_v20.css" />
-
-  <!-- If calculator.js isn't needed on this page, you can remove this script.
-       Keeping it is fine, but it adds unnecessary load. -->
   <script defer src="calculator.js?v=1000"></script>
 
   <meta name="description" content="Important considerations and limitations for interpreting OGTT-derived glucose/insulin indices and metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
@@ -51,8 +46,8 @@
   }
   </script>
 
-  <!-- SAFE anti-truncation + FORCE bullets (extra safety net) -->
   <style>
+    /* Prevent any truncation/clipping */
     .card, .card *{
       overflow: visible !important;
       max-height: none !important;
@@ -61,26 +56,40 @@
       white-space: normal !important;
       text-overflow: clip !important;
     }
-    .card ul{
-      list-style: disc !important;
+
+    /* FORCE bullets and override any dash pseudo-element bullets */
+    main.container .card ul{
+      list-style-type: disc !important;
       list-style-position: outside !important;
-      margin: 10px 0 14px 1.25rem !important;
-      padding-left: 1.25rem !important;
+      padding-left: 1.4rem !important;
+      margin: 10px 0 14px 0 !important;
     }
-    .card li{
+
+    main.container .card li{
       display: list-item !important;
       margin: 8px 0 !important;
     }
-    .card li::before{ content: none !important; }
 
-    /* Deploy marker: lets you confirm you're seeing THIS exact HTML */
+    /* Kill any CSS that injects dashes */
+    main.container .card ul li::before,
+    main.container .card ul li::after,
+    main.container .card li::before,
+    main.container .card li::after{
+      content: none !important;
+      display: none !important;
+    }
+
+    /* Ensure browser marker is allowed to render */
+    main.container .card li::marker{
+      content: initial !important;
+    }
+
     #deploy-marker{ display:none; }
   </style>
 </head>
 
 <body>
-  <!-- Deploy marker: if you view page source, you should see this exact string -->
-  <div id="deploy-marker">DEPLOY-MARKER: considerations.html v20</div>
+  <div id="deploy-marker">DEPLOY-MARKER: considerations.html v21</div>
 
   <header class="nav">
     <div class="nav-inner">
