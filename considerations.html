@@ -9,7 +9,10 @@
   <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
   <meta http-equiv="Pragma" content="no-cache" />
 
-  <link rel="stylesheet" href="styles_v20.css" />
+  <!-- IMPORTANT: point to the NEW CSS filename (styles_v21.css) -->
+  <link rel="stylesheet" href="styles_v21.css" />
+
+  <!-- Not needed on this page, but safe if you want to keep it -->
   <script defer src="calculator.js?v=1000"></script>
 
   <meta name="description" content="Important considerations and limitations for interpreting OGTT-derived glucose/insulin indices and metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
@@ -46,8 +49,8 @@
   }
   </script>
 
+  <!-- Extra “wins-against-anything” bullet reset (kept inline as a safety net) -->
   <style>
-    /* Prevent any truncation/clipping */
     .card, .card *{
       overflow: visible !important;
       max-height: none !important;
@@ -57,12 +60,11 @@
       text-overflow: clip !important;
     }
 
-    /* FORCE bullets and override any dash pseudo-element bullets */
     main.container .card ul{
       list-style-type: disc !important;
       list-style-position: outside !important;
       padding-left: 1.4rem !important;
-      margin: 10px 0 14px 0 !important;
+      margin: 12px 0 !important;
     }
 
     main.container .card li{
@@ -70,7 +72,6 @@
       margin: 8px 0 !important;
     }
 
-    /* Kill any CSS that injects dashes */
     main.container .card ul li::before,
     main.container .card ul li::after,
     main.container .card li::before,
@@ -79,7 +80,6 @@
       display: none !important;
     }
 
-    /* Ensure browser marker is allowed to render */
     main.container .card li::marker{
       content: initial !important;
     }
@@ -89,7 +89,7 @@
 </head>
 
 <body>
-  <div id="deploy-marker">DEPLOY-MARKER: considerations.html v21</div>
+  <div id="deploy-marker">DEPLOY-MARKER: considerations.html v22</div>
 
   <header class="nav">
     <div class="nav-inner">
