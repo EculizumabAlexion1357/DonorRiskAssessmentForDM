@@ -6,8 +6,15 @@
   <meta name="robots" content="index, follow" />
   <title>Important Considerations | Living Kidney Donor Prediabetes Risk Platform</title>
 
-  <!-- IMPORTANT: use a NEW FILENAME to bypass Cloudflare/GitHub caching completely -->
+  <!-- Optional: helps some caches behave (safe) -->
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+
+  <!-- IMPORTANT: use a NEW FILENAME to bypass caching completely -->
   <link rel="stylesheet" href="styles_v20.css" />
+
+  <!-- If calculator.js isn't needed on this page, you can remove this script.
+       Keeping it is fine, but it adds unnecessary load. -->
   <script defer src="calculator.js?v=1000"></script>
 
   <meta name="description" content="Important considerations and limitations for interpreting OGTT-derived glucose/insulin indices and metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
@@ -44,7 +51,7 @@
   }
   </script>
 
-  <!-- SAFE anti-truncation + FORCE bullets (kept as an extra safety net) -->
+  <!-- SAFE anti-truncation + FORCE bullets (extra safety net) -->
   <style>
     .card, .card *{
       overflow: visible !important;
@@ -65,10 +72,16 @@
       margin: 8px 0 !important;
     }
     .card li::before{ content: none !important; }
+
+    /* Deploy marker: lets you confirm you're seeing THIS exact HTML */
+    #deploy-marker{ display:none; }
   </style>
 </head>
 
 <body>
+  <!-- Deploy marker: if you view page source, you should see this exact string -->
+  <div id="deploy-marker">DEPLOY-MARKER: considerations.html v20</div>
+
   <header class="nav">
     <div class="nav-inner">
       <div class="brand">
