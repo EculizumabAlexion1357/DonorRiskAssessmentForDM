@@ -6,8 +6,9 @@
   <meta name="robots" content="index, follow" />
   <title>Important Considerations | Living Kidney Donor Prediabetes Risk Platform</title>
 
-  <link rel="stylesheet" href="styles.css" />
-  <script defer src="calculator.js?v=2"></script>
+  <!-- Cache-bust CSS and JS so changes show immediately after deploy -->
+  <link rel="stylesheet" href="styles.css?v=3" />
+  <script defer src="calculator.js?v=3"></script>
 
   <meta name="description" content="Important considerations and limitations for interpreting OGTT-derived glucose/insulin indices and metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
 
@@ -44,18 +45,16 @@
   }
   </script>
 
-  <!-- Page-only safety override to prevent text truncation caused by repo CSS -->
+  <!-- SAFE anti-truncation (does NOT touch display) -->
   <style>
-    main.container, .card, .card * {
+    .card, .card *{
       overflow: visible !important;
       max-height: none !important;
       height: auto !important;
       -webkit-line-clamp: unset !important;
-      display: revert !important;
       white-space: normal !important;
       text-overflow: clip !important;
     }
-    .card { display: block !important; }
   </style>
 </head>
 
@@ -113,7 +112,6 @@
         intraindividual biologic variability (CVb).
       </p>
 
-      <!-- RESTORED missing bullet list (removes the stray dash issue) -->
       <ul>
         <li>
           One study reported average CVb values of 7.4% for HDL cholesterol and 22.6% for triglycerides.
