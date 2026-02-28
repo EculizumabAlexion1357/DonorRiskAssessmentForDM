@@ -6,13 +6,12 @@
   <meta name="robots" content="index, follow" />
   <title>Important Considerations | Living Kidney Donor Prediabetes Risk Platform</title>
 
-  <!-- STRONG cache-bust: change both the query string and (optionally) filename if needed -->
-  <link rel="stylesheet" href="styles.css?v=999" />
-  <script defer src="calculator.js?v=999"></script>
+  <!-- IMPORTANT: use a NEW FILENAME to bypass Cloudflare/GitHub caching completely -->
+  <link rel="stylesheet" href="styles_v20.css" />
+  <script defer src="calculator.js?v=1000"></script>
 
   <meta name="description" content="Important considerations and limitations for interpreting OGTT-derived glucose/insulin indices and metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
 
-  <!-- Update these URLs if your live domain differs -->
   <link rel="canonical" href="https://donorprediabetesrisk.org/considerations.html" />
   <meta property="og:title" content="Important Considerations | Living Kidney Donor Prediabetes Risk Platform" />
   <meta property="og:description" content="Important considerations and limitations for interpreting OGTT-derived indices and ATP III metabolic syndrome criteria in living kidney donor candidates with prediabetes." />
@@ -45,9 +44,8 @@
   }
   </script>
 
-  <!-- SAFE anti-truncation + FORCE list markers (bullets) -->
+  <!-- SAFE anti-truncation + FORCE bullets (kept as an extra safety net) -->
   <style>
-    /* Prevent any truncation/clipping */
     .card, .card *{
       overflow: visible !important;
       max-height: none !important;
@@ -56,8 +54,6 @@
       white-space: normal !important;
       text-overflow: clip !important;
     }
-
-    /* Force bullets even if an external stylesheet is stale/cached */
     .card ul{
       list-style: disc !important;
       list-style-position: outside !important;
